@@ -438,7 +438,7 @@ namespace ShiftHappens.Editor
                 pending = 0;
                 resumeTeachingAt = null;
                 resumeCheckpointAt = 0;
-                if (!board.ShowEditorReplay(replay, setup, focus, Restart, showFirstGuidedShift))
+                if (!board.ShowEditorReplay(replay, setup, focus, Restart, Stop, showFirstGuidedShift))
                 {
                     Debug.LogWarning("Close Review Mode before starting the live replay.");
                     return;
@@ -447,6 +447,8 @@ namespace ShiftHappens.Editor
                 EditorApplication.update -= liveReplayTick;
                 EditorApplication.update += liveReplayTick;
             }
+
+            void Stop() => EditorApplication.update -= Tick;
 
             void Tick()
             {

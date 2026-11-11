@@ -45,7 +45,8 @@ namespace ShiftHappens
             new(0,23), new(-22,23), new(22,23), new(0,-44), new(0,44),
             new(-42,-36), new(42,-36), new(-42,36), new(42,36),
         };
-        private Button tieButton;
+        private Button tieButton, newOpponentButton;
+        private Text newOpponentLabel;
         private Pointer activePointer;
         private ReviewMode review;
         private CanvasGroup practiceControls;
@@ -55,6 +56,10 @@ namespace ShiftHappens
         private readonly System.Collections.Generic.List<(RectTransform node, Rect desktop, Rect portrait)> layout = new();
         private bool? replayFirstGuidedShift;
         private bool FirstGuidedShift => shift.Guided && (replayFirstGuidedShift ?? (presetIndex == 0));
+#if UNITY_EDITOR
+        private PracticeShift practiceBeforeReplay;
+        private System.Action restartReplay, stopReplay;
+#endif
 
         private void Awake()
         {
@@ -183,25 +188,71 @@ namespace ShiftHappens
             DrawShift();
         }
 
+        private void PlayOrReplay()
+        {
 #if UNITY_EDITOR
-        public bool ShowEditorReplay(PracticeShift replay, string setup, string focus, System.Action restart,
+            if (restartReplay != null)
+            {
+                restartReplay();
+                return;
+            }
+#endif
+            if (shift.Stage == PracticeShift.Phase.Finished) SelectSeed(shift.Seed);
+            shift.TogglePlay();
+        }
+
+        private void NewOpponentOrReturnToPractice()
+        {
+#if UNITY_EDITOR
+            if (practiceBeforeReplay != null)
+            {
+                ReturnToPractice();
+                return;
+            }
+#endif
+            SelectSeed(Random.Range(0, int.MaxValue));
+        }
+
+#if UNITY_EDITOR
+        public bool ShowEditorReplay(PracticeShift replay, string setup, string focus, System.Action restart, System.Action stop,
             bool showFirstGuidedShift = false)
         {
             if (review.Active) return false;
+            practiceBeforeReplay ??= shift;
+            restartReplay = restart;
+            stopReplay = stop;
             enabled = false;
             shift = replay;
             replayFirstGuidedShift = showFirstGuidedShift;
             presetLabel.text = setup;
+            newOpponentLabel.text = "Back to practice";
             var replayButton = playLabel.transform.parent.GetComponent<Button>();
             foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
-                button.interactable = button == replayButton;
-            replayButton.onClick.RemoveAllListeners();
-            replayButton.onClick.AddListener(() => restart());
+                button.interactable = button == replayButton || button == newOpponentButton;
             var highlight = new Color(0f, 0.40f, 0.39f, .97f);
             blueNameplates[2].GetComponent<UnityEngine.UI.Image>().color = focus == "C" ? highlight : NameplateBlue;
             blueNameplates[3].GetComponent<UnityEngine.UI.Image>().color = focus == "LW" ? highlight : NameplateBlue;
             blueNameplates[4].GetComponent<UnityEngine.UI.Image>().color = focus == "RW" ? highlight : NameplateBlue;
             return true;
+        }
+
+        private void ReturnToPractice()
+        {
+            stopReplay();
+            shift = practiceBeforeReplay;
+            practiceBeforeReplay = null;
+            restartReplay = stopReplay = null;
+            replayFirstGuidedShift = null;
+            usingKeys = false;
+            activePointer = null;
+            presetLabel.text = $"Setup ▸ {presets[presetIndex].Name}";
+            newOpponentLabel.text = "New opponent";
+            foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
+                button.interactable = true;
+            foreach (var nameplate in blueNameplates)
+                nameplate.GetComponent<Image>().color = NameplateBlue;
+            enabled = true;
+            DrawShift();
         }
 
         public void DrawEditorReplay(string title, string caption, string result)
@@ -214,7 +265,11 @@ namespace ShiftHappens
                 coverage.text = result;
             }
             else if (shift.Stage == PracticeShift.Phase.Ready)
+            {
                 header.text = caption;
+                status.text = "Watch Blue LD in this scripted replay.";
+                coverage.text = "Choose Back to practice to skate.";
+            }
             playLabel.text = "Replay";
             tieButton.interactable = false;
             if (!FirstGuidedShift && shift.Stage == PracticeShift.Phase.Pass)
@@ -449,19 +504,16 @@ namespace ShiftHappens
             coverage.resizeTextMaxSize = 22;
             Responsive(status.rectTransform, new(26, -704, 274, 100));
             Responsive(coverage.rectTransform, new(340, -704, 274, 100));
-            playLabel = Control("Start", root, new(720, -408, 268, 60), () =>
-            {
-                if (shift.Stage == PracticeShift.Phase.Finished) SelectSeed(shift.Seed);
-                shift.TogglePlay();
-            }, out _);
+            playLabel = Control("Start", root, new(720, -408, 268, 60), PlayOrReplay, out _);
             Responsive(playLabel, new(340, -815, 274, 66));
             var point = Control("Point look · 0", root, new(720, -484, 129, 46), () => SelectSeed(0), out _);
             var slot = Control("Slot look · 1", root, new(859, -484, 129, 46), () => SelectSeed(1), out _);
             point.fontSize = slot.fontSize = 17;
             Responsive(point, new(26, -893, 274, 66));
             Responsive(slot, new(340, -893, 274, 66));
-            Responsive(Control("New opponent", root, new(720, -542, 268, 46), () => SelectSeed(Random.Range(0, int.MaxValue)), out _),
-                new(340, -1048, 274, 66));
+            newOpponentLabel = Control("New opponent", root, new(720, -542, 268, 46), NewOpponentOrReturnToPractice,
+                out newOpponentButton);
+            Responsive(newOpponentLabel, new(340, -1048, 274, 66));
             modeLabel = Control("Guided", root, new(720, -600, 129, 46), () =>
             {
                 guided = !guided;
