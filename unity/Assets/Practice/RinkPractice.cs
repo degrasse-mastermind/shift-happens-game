@@ -17,6 +17,8 @@ namespace ShiftHappens
         {
             new() { Name = "Original handoff", Settings = new DraftShiftSettings() },
             new(),
+            new() { Name = "Behind net", Settings = DraftShiftSettings.BehindNetPreset() },
+            new() { Name = "Behind net · delayed exit", Settings = DraftShiftSettings.BehindNetPreset(2) },
         };
         private int presetIndex;
         private DraftShiftSettings draftCoaching => presets[presetIndex].Settings;
@@ -251,9 +253,10 @@ namespace ShiftHappens
             tieMarker.GetComponent<RawImage>().color = shift.Tied ? Blue : Amber;
             if (warningActive) DrawPassLane(shift.NetFrontAttacker);
 
-            header.text = $"CUES & SCORING FINAL     SEED {shift.Seed}  ·  {shift.Time:0.0}s";
+            header.text = $"{(shift.BehindNetScenario ? "DRAFT COACHING" : "CUES & SCORING FINAL")}     SEED {shift.Seed}  ·  {shift.Time:0.0}s";
             status.text = shift.Paused ? "Paused" : shift.Message;
             coverage.text = shift.Stage == PracticeShift.Phase.Finished ? shift.ScoreSummary
+                : shift.BehindNetScenario ? BehindNetCoverage()
                 : guided || shift.Stage == PracticeShift.Phase.Ready
                     ? shift.ContainmentAvailable ? "RD covers net front  |  LD may contain from inside"
                         : shift.PuckPossession == PracticeShift.Possession.RedCarrier
@@ -268,6 +271,14 @@ namespace ShiftHappens
                 : shift.Paused ? "Resume" : "Pause";
             modeLabel.text = guided ? "Guided" : "Freer";
             tieButton.interactable = shift.CanSkate;
+        }
+
+        private string BehindNetCoverage()
+        {
+            if (shift.PuckPossession != PracticeShift.Possession.RedCarrier) return "Track the puck through the play";
+            if (!shift.Guided && shift.Stage != PracticeShift.Phase.Ready) return "FREER  /  Draft scores after the shift";
+            return shift.BehindNetExitAt.HasValue ? "RD takes the puck side  |  LD stays with Red C"
+                : "LD holds inside  |  Watch Red C";
         }
 
         private void DrawPassLane(Vector2 destination)

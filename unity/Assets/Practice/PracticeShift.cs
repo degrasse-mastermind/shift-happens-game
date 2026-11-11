@@ -47,6 +47,9 @@ namespace ShiftHappens
         public bool PartnerArrivedWrongSide => Vector2.Distance(Partner, PartnerCoverageTarget) <= 5f &&
             settings.Map(Partner).x >= settings.Map(NetFrontAttacker).x;
         public float? HandoffAt { get; private set; }
+        public float? BehindNetExitAt { get; private set; }
+        public bool BehindNetScenario => settings.BehindNetCarry;
+        public bool BehindNetCrossing => BehindNetScenario && BehindNetRotation.BehindGoal(settings.Map(Carrier));
         public bool ContainmentAvailable => PartnerHasCoverage && IsCarrierWindow && Carrier.y < 397f;
         public bool Containing { get; private set; }
         public ReadResult HoldRead { get; private set; }
@@ -66,13 +69,17 @@ namespace ShiftHappens
         public string PassReceiver => SlotFeed ? settings.NetFrontLabel : toUpperPoint ? "RD" : "LD";
         public bool SlotLaneCovered => NetFrontLaneCovered();
         public Vector2 Goalie { get; private set; }
-        public string ScoreSummary => $"FINAL SCORE  Hold: {HoldRead}{(openedSlotBeforeHandoff ? " (left net front and opened slot)" : "")}  |  Contain: {ContainRead}";
+        public string ScoreSummary => BehindNetScenario
+            ? $"DRAFT SCORE  Hold inside: {HoldRead}  |  Cover Red C: {ContainRead}"
+            : $"FINAL SCORE  Hold: {HoldRead}{(openedSlotBeforeHandoff ? " (left net front and opened slot)" : "")}  |  Contain: {ContainRead}";
         public string PositioningSummary
         {
             get
             {
                 if (Stage != Phase.Ready && !IsCarrierWindow)
                     return "Inside-shoulder positioning is reviewed while Red carries.";
+                if (BehindNetScenario)
+                    return $"Draft net-front read: LD {(PlayerCoversNetFront() ? "covers Red C" : "leaves Red C open")}.";
                 Vector2 net = settings.Map(ZoneSkating.BlueNet);
                 string Shoulder(Vector2 defender, Vector2 threat) =>
                     ZoneSkating.InsideShoulderDepth(defender, threat, net) > 0f ? "inside" : "outside";
@@ -95,6 +102,7 @@ namespace ShiftHappens
         private float holdEligibleTime;
         private float holdCoveredTime;
         private float containEligibleTime;
+        private float exitCoveredTime;
         private float containStreakTime;
         private bool completedContainStreak;
         private float openLaneTime;
@@ -134,6 +142,8 @@ namespace ShiftHappens
             Puck = settings.Map(settings.PuckStart);
             if (settings.CornerCarry)
                 Message = $"Red {settings.CarrierLabel} has the puck in the upper corner. Protect the lane to Red {settings.NetFrontLabel}.";
+            if (BehindNetScenario)
+                Message = "Red starts on your side. Hold inside and watch Red C.";
             Goalie = settings.Map(ZoneSkating.BlueNet);
             slotFeed = (seed & 1) == 1;
         }
@@ -145,7 +155,8 @@ namespace ShiftHappens
             else if (TeachingPaused)
             {
                 TeachingPaused = false;
-                Message = "Hold the middle until RD has coverage.";
+                Message = BehindNetScenario ? "Keep Red C in sight. RD has the other post."
+                    : "Hold the middle until RD has coverage.";
             }
             else if (Stage != Phase.Finished) Paused = !Paused;
         }
@@ -195,24 +206,31 @@ namespace ShiftHappens
             if (Stage == Phase.Carry) SkateCarrier();
             skating.Step(dt, Time, Puck, Player, Partner, CenterSupportsContain(), Tied, Stage == Phase.LoosePuck,
                 Stage == Phase.Pass && SlotFeed ? passTarget : null,
-                Stage == Phase.Pass && !SlotFeed ? passTarget : null, toUpperPoint);
+                Stage == Phase.Pass && !SlotFeed ? passTarget : null, toUpperPoint, BehindNetExitAt.HasValue);
             Goalie = new Vector2(Goalie.x, Mathf.MoveTowards(Goalie.y,
                 Mathf.Clamp(Stage == Phase.Shot ? shotTarget.y : Puck.y, 365f, 429f),
                 (Stage == Phase.Shot ? 12f : 20f) * dt));
             MovePartner(dt);
             ObserveDecisions(dt);
 
-            if (Guided && !teachingShown && !HandoffAt.HasValue && Stage == Phase.Carry && Time >= 0.8f)
+            if (Guided && !teachingShown && !HandoffAt.HasValue && Stage == Phase.Carry &&
+                (BehindNetScenario ? BehindNetCrossing : Time >= 0.8f))
             {
                 teachingShown = true;
                 TeachingPaused = true;
-                Message = "RD is still returning. Protect the middle, then resume and read the handoff.";
+                Message = BehindNetScenario ? "Hold inside. RD seals the other post and C protects the slot."
+                    : "RD is still returning. Protect the middle, then resume and read the handoff.";
                 return;
             }
 
             switch (Stage)
             {
                 case Phase.Carry:
+                    if (BehindNetScenario)
+                    {
+                        ChooseBehindNetPass();
+                        break;
+                    }
                     if (openLaneTime >= 0.5f && Time >= 1.5f)
                     {
                         if (!HandoffAt.HasValue) openedSlotBeforeHandoff = true;
@@ -285,6 +303,21 @@ namespace ShiftHappens
 
         private void SkateCarrier()
         {
+            if (BehindNetScenario)
+            {
+                Vector2 local = BehindNetRotation.CarrierAt(settings.CarrierStart, Time, settings.BehindNetWait);
+                Carrier = settings.Map(local);
+                Puck = settings.Map(local + settings.PuckStart - settings.CarrierStart);
+                if (!BehindNetExitAt.HasValue && BehindNetRotation.Exited(local))
+                {
+                    BehindNetExitAt = Time;
+                    HoldRead = EvaluateHold();
+                    openLaneTime = 0;
+                    Message = Guided ? "RD takes the carrier. Stay goal-side of Red C."
+                        : "Red comes out on the other side.";
+                }
+                return;
+            }
             Vector2[] waypoints = settings.CornerCarry ? CornerCarrierWaypoints : StandardCarrierWaypoints;
             for (int i = 1; i < RouteTimes.Length; i++)
             {
@@ -298,6 +331,20 @@ namespace ShiftHappens
                 Puck = settings.Map(carrierPosition + puckOffset);
                 break;
             }
+        }
+
+        private void ChooseBehindNetPass()
+        {
+            if (!BehindNetExitAt.HasValue) return;
+            if (openLaneTime >= .5f)
+            {
+                slotFeed = true;
+                WarnForPass("The slot opened. Red looks for Red C.");
+                return;
+            }
+            if (Time - BehindNetExitAt.Value < 1.7f) return;
+            slotFeed = false;
+            ReleasePass();
         }
 
         private void ReleasePass(bool contained = false)
@@ -326,6 +373,14 @@ namespace ShiftHappens
 
         private void MovePartner(float dt)
         {
+            if (BehindNetScenario)
+            {
+                Vector2 target = BehindNetRotation.PartnerTarget(settings.Map(Carrier), BehindNetExitAt.HasValue);
+                Partner = Vector2.MoveTowards(Partner, settings.Map(target), settings.PartnerReturnSpeed * dt);
+                Vector2 look = (Puck - Partner).normalized;
+                if (look.sqrMagnitude > 0) PartnerFacing = look;
+                return;
+            }
             if (Time >= settings.PartnerReturnDelay)
                 Partner = Vector2.MoveTowards(Partner, PartnerCoverageTarget, settings.PartnerReturnSpeed * dt);
             Vector2 lookTarget = (Puck + NetFrontAttacker) * 0.5f;
@@ -359,6 +414,12 @@ namespace ShiftHappens
             if (!IsCarrierWindow) return;
             bool covered = NetFrontLaneCovered();
             openLaneTime = covered ? 0 : openLaneTime + dt;
+            if (BehindNetScenario && BehindNetExitAt.HasValue)
+            {
+                containEligibleTime += dt;
+                if (covered) exitCoveredTime += dt;
+                return;
+            }
             if (!HandoffAt.HasValue)
             {
                 holdEligibleTime += dt;
@@ -377,6 +438,9 @@ namespace ShiftHappens
 
         private bool PlayerCoversNetFront()
         {
+            if (BehindNetScenario)
+                return ZoneSkating.InsideShoulderDepth(Player, NetFrontAttacker, settings.Map(ZoneSkating.BlueNet)) >= settings.GoalSideMargin &&
+                    Vector2.Distance(Player, NetFrontAttacker) <= settings.CoverageReach;
             // In the marked setup LD starts up the lane from LW and guards the feed from inside.
             if (!settings.HoldFromPassingLane) return CoversNetFront(Player);
             return settings.Map(Player).x <= settings.Map(NetFrontAttacker).x - settings.GoalSideMargin &&
@@ -430,6 +494,13 @@ namespace ShiftHappens
         {
             if (HoldRead == ReadResult.Pending)
                 HoldRead = EvaluateHold();
+            if (BehindNetScenario)
+            {
+                if (ContainRead == ReadResult.Pending)
+                    ContainRead = containEligibleTime < .5f ? ReadResult.Unobserved
+                        : exitCoveredTime / containEligibleTime >= settings.RequiredHoldCoverage ? ReadResult.Met : ReadResult.Missed;
+                return;
+            }
             if (ContainRead == ReadResult.Pending)
                 ContainRead = completedContainStreak ? ReadResult.Met
                     : containEligibleTime < settings.ContainHoldTime + 0.5f ? ReadResult.Unobserved : ReadResult.Missed;

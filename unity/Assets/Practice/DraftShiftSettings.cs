@@ -10,6 +10,8 @@ namespace ShiftHappens
         public enum RedForward { C, LW, RW }
 
         public bool CornerCarry;
+        public bool BehindNetCarry;
+        [Min(0)] public float BehindNetWait;
         public bool HoldFromPassingLane;
         public bool Mirror;
         public Vector2 PartnerStart = new(130, 600);
@@ -64,6 +66,19 @@ namespace ShiftHappens
             NetFrontRole = RedForward.LW,
             SupportRole = RedForward.RW,
         };
+        public static DraftShiftSettings BehindNetPreset(float wait = 0) => new()
+        {
+            BehindNetCarry = true,
+            BehindNetWait = wait,
+            PlayerStart = new(151, 373),
+            CoverageReach = 82,
+            PartnerStart = new(132, 516),
+            BlueCenter = new(243, 329),
+            NetFrontStart = new(208, 397),
+            CarrierStart = new(171, 232),
+            PuckStart = new(154, 241),
+        };
+
         public string NetFrontLabel => NetFrontRole.ToString();
         public string CarrierLabel => CarrierRole.ToString();
         public string SupportLabel => SupportRole.ToString();

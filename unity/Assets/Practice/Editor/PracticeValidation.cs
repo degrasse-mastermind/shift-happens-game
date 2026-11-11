@@ -30,7 +30,9 @@ namespace ShiftHappens.Editor
                 CheckSupportPositions(DraftShiftSettings.MarkedPreset());
                 CheckPointLaneCut(LateCenterSettings(), upperPoint: false);
                 CheckPointLaneCut(new DraftShiftSettings(), upperPoint: true);
-                Debug.Log("PRACTICE_CHECKS_PASSED (16 checks)");
+                CheckBehindNet(false);
+                CheckBehindNet(true);
+                Debug.Log("PRACTICE_CHECKS_PASSED (18 checks)");
             }
             catch (Exception exception)
             {
@@ -115,6 +117,84 @@ namespace ShiftHappens.Editor
             var settings = DraftShiftSettings.MarkedPreset();
             settings.BlueCenter = new Vector2(380, 620);
             return settings;
+        }
+
+        [MenuItem("Tools/Shift Happens/Watch Behind Net/Hold net front")]
+        public static void WatchBehindNetHold() => WatchBehindNet(false, 0);
+
+        [MenuItem("Tools/Shift Happens/Watch Behind Net/Chase the carrier")]
+        public static void WatchBehindNetChase() => WatchBehindNet(true, 0);
+
+        [MenuItem("Tools/Shift Happens/Watch Behind Net/Delayed exit")]
+        public static void WatchBehindNetDelayed() => WatchBehindNet(false, 2);
+
+        private static void WatchBehindNet(bool chase, float wait)
+        {
+            string setup = wait > 0 ? "Behind net · delayed exit" : "Behind net";
+            WatchReplay(DraftShiftSettings.BehindNetPreset(wait), 1, setup, "BEHIND THE NET · DRAFT", "LD",
+                chase ? "Compare what opens when LD chases" : "Watch LD protect Red C as the puck changes sides",
+                replay =>
+                {
+                    SteerBehindNet(replay, chase);
+                    replay.Step(ReplayStep);
+                    if (replay.Stage != PracticeShift.Phase.Finished) return null;
+                    Debug.Log($"LIVE_BEHIND_NET chase={chase} wait={wait:0.0} " +
+                        $"slot={replay.SlotFeed} end={replay.Time:0.00} {replay.Message} {replay.ScoreSummary}");
+                    return $"{replay.Message}  {replay.ScoreSummary}";
+                },
+                replay => replay.Stage != PracticeShift.Phase.Carry ? replay.Message
+                    : replay.BehindNetExitAt.HasValue ? "RD moves out. LD is responsible for Red C."
+                    : replay.BehindNetCrossing ? "Red crosses behind the net. Watch both posts and the slot."
+                    : "Red approaches the goal line. Watch LD and the slot.",
+                guided: true);
+        }
+
+        private static void SteerBehindNet(PracticeShift shift, bool chase)
+        {
+            if (chase && shift.Time >= 2f && !shift.BehindNetExitAt.HasValue)
+                shift.SkateTo(shift.Carrier);
+        }
+
+        private static void CheckBehindNet(bool delayed)
+        {
+            var settings = DraftShiftSettings.BehindNetPreset(delayed ? 2 : 0);
+            settings.Mirror = delayed;
+            PracticeShift Play(bool chase)
+            {
+                var shift = new PracticeShift(1, settings, guided: true);
+                shift.TogglePlay();
+                bool sawPause = false;
+                bool passed = false;
+                float? firstPost = null;
+                while (shift.Stage != PracticeShift.Phase.Finished)
+                {
+                    SteerBehindNet(shift, chase);
+                    shift.Step(ReplayStep);
+                    if (shift.TeachingPaused)
+                    {
+                        Require(shift.BehindNetCrossing,
+                            "The behind-net pause must start during the crossing.");
+                        sawPause = true;
+                        shift.TogglePlay();
+                    }
+                    Vector2 localPartner = settings.Map(shift.Partner);
+                    if (localPartner.x < 135 && localPartner.y > 425 && localPartner.y < 445)
+                        firstPost ??= shift.Time;
+                    if (shift.Stage == PracticeShift.Phase.Pass) passed = true;
+                }
+                Require(sawPause && passed && shift.BehindNetExitAt.HasValue && firstPost < shift.BehindNetExitAt,
+                    "The replay must show RD sealing before Red exits and reach a pass.");
+                Debug.Log($"BEHIND_NET_CHECK delayed={delayed} chase={chase} exit={shift.BehindNetExitAt:0.00} " +
+                    $"slot={shift.SlotFeed} end={shift.Time:0.00} {shift.Message} {shift.ScoreSummary}");
+                return shift;
+            }
+            PracticeShift held = Play(false);
+            PracticeShift chased = Play(true);
+            Require(Mathf.Abs(held.BehindNetExitAt.Value - (delayed ? 9.8f : 7.8f)) < .05f,
+                "The configured wait must change when Red exits.");
+            Require(!held.SlotFeed && chased.SlotFeed, "LD's route must change whether Red tries the slot.");
+            Require(held.HoldRead == PracticeShift.ReadResult.Met && held.ContainRead == PracticeShift.ReadResult.Met &&
+                chased.ContainRead == PracticeShift.ReadResult.Missed, "Draft reads must reflect LD's coverage.");
         }
 
         private static EditorApplication.CallbackFunction liveReplayTick;

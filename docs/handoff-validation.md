@@ -353,3 +353,13 @@ Both proof replays matched the approved practice runs at the handoff and contain
 In the extended replays, Red released at 5.92 s in **Original handoff** and 5.94 s in **Marked right corner**. Both plays ended with the puck loose and contested, at 9.84 s and 9.60 s respectively. Hold and Contain both scored Met in both presets. The Unity Game view check observed the outline throughout both passes and verified that each outcome matched the same replay inputs run directly in the practice simulation.
 
 On November 11, 2026, after watching both extended replays, David approved **Original handoff** and **Marked right corner** through the end of play for the isolated Stylized Pro proof scene. The approval covers the puck outline staying visible through the pass and the contested loose-puck ending in both presets.
+
+### Behind-the-net rotation — draft Unity practice
+
+The **Setup** control in `DefensivePractice` now offers **Behind net** and **Behind net · delayed exit**. Coach Russ's [center and wing explanation](https://www.youtube.com/watch?v=E0C7GrAllFg&t=77s) and [behind-net rotation](https://www.youtube.com/watch?v=E0C7GrAllFg&t=325s) informed the [rink diagram](behind-the-net-ld-rink-diagram.png) and draft assignments. Blue LD protects the inside and stays responsible for Red C. RD guards the exit-side post and closes from inside after Red emerges. C protects the slot during the crossing and supports on the new puck side. The wings hold their lane assignments through the crossing, then trade point-side coverage and weak-side support. Guided pauses during the crossing. The delayed preset adds two seconds behind the goal.
+
+The carry route is repeatable. On exit, Red looks for Red C if LD has opened net front, or compares the point lanes if the middle stays covered. A missed lane read and the eventual puck outcome are scored separately. The two draft reads are **Hold inside** and **Cover Red C**.
+
+In the Editor, enter Play Mode and use **Tools → Shift Happens → Watch Behind Net**. Choose **Hold net front**, **Chase the carrier**, or **Delayed exit**. The first two use the same setup and seed. **Replay** repeats the selected run.
+
+In the live standard replay, holding sent Red to the point and Blue's goalie covered at 12.56 s. Chasing opened a feed to Red C. Blue recovered the resulting loose puck at 10.14 s and both draft reads scored Missed. In the delayed hold replay, Red emerged about two seconds later and the goalie covered at 14.42 s. All 18 practice checks passed, including the mirrored delayed exit. Standalone and physical-phone play are unverified.

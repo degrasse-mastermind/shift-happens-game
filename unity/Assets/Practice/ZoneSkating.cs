@@ -64,12 +64,14 @@ namespace ShiftHappens
         }
 
         public void Step(float dt, float time, Vector2 puck, Vector2 ld, Vector2 rd,
-            bool supportContain, bool tied, bool loose, Vector2? slotReception, Vector2? pointReception, bool toUpperPoint)
+            bool supportContain, bool tied, bool loose, Vector2? slotReception, Vector2? pointReception,
+            bool toUpperPoint, bool behindNetExited = false)
         {
             puck = settings.Map(puck);
             ld = settings.Map(ld);
             rd = settings.Map(rd);
             float upperSide = Mathf.InverseLerp(495, 299, puck.y);
+            if (settings.BehindNetCarry && !behindNetExited) upperSide = 1;
             float cut = Mathf.Sin(time * 1.03f + rhythm);
             float cycle = Mathf.Sin(time * 0.71f + rhythm + 1.4f);
 
@@ -80,6 +82,9 @@ namespace ShiftHappens
                 Mathf.Lerp(397f, Mathf.Clamp(puck.y, 215f, 579f), 0.42f));
             // Both current contain routes are on the upper side, including when mirrored.
             if (supportContain) centerTarget = UpperCircleSupport;
+            if (settings.BehindNetCarry)
+                centerTarget = behindNetExited ? BehindNetRotation.ExitSupport
+                    : puck.x < 99 ? BehindNetRotation.SlotSupport : centerTarget;
             if (loose && Vector2.Distance(center.Position, puck) < 115f)
                 centerTarget = Vector2.Lerp(centerTarget, puck, 0.48f);
             centerTarget += SpaceFrom(centerTarget, ld, 55f) + SpaceFrom(centerTarget, rd, 55f);
