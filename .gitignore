@@ -1,0 +1,25 @@
+# Unity-generated files and local builds
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+unity/[Bb]uilds/
+unity/*.csproj
+unity/*.sln
+unity/*.slnx
+unity/.vs/
+unity/.idea/
+unity/MemoryCaptures/
+unity/Recordings/
+
+# Browser reference dependencies, generated output and render profiles
+**/node_modules/
+reference/browser/dist/
+reference/browser/visual-design/.render*/
+reference/browser/visual-design/.library-transfer*/
+
+# Local verification results
+artifacts/
+**/__pycache__/
+*.user

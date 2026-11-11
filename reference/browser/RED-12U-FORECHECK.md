@@ -1,0 +1,9 @@
+# Red 12U movement model
+
+This playable exchange uses a simple 2–1–2 forecheck after Blue gains the puck. Hockey Canada's [U13 player pathway](https://cdn.hockeycanada.ca/hockey-canada/Hockey-Programs/Coaching/u13-program/downloads/2023/u13-player-pathway-e.pdf) introduces basic team play and gives an aggressive 2–1–2 as an example. The [Hockey Canada Drill Hub](https://www.hockeycanada.ca/en-ca/hockey-programs/drill-hub) teaches F1 angling from inside out and F2 reading the wall. The [Ice Hockey Systems 2–1–2 explanation](https://www.icehockeysystems.com/print/standard/183) describes F1/F2 pressure, F3 middle support, and two defensemen at the points. This is one teachable 12U choice, not a claim that every 12U team uses it.
+
+When Blue gains possession, the nearest Red forward takes F1 and angles toward the carrier from the inside. The next forward takes F2 and closes the same-side wall outlet. The third forward takes F3, staying high in the middle to guard a central pass. Red RD and LD hold separate point lanes behind them. These assignments persist during the possession so players do not swap jobs every frame. Targets respond to the carrier's side, and skaters keep separation when paths converge. There are no automated body checks; [USA Hockey](https://www.usahockey.com/news_article/show/1015867-playing-it-safe) places legal body checking at 14U and older.
+
+When Red has the puck, it is attacking rather than forechecking. The two support forwards adjust to the puck side: one offers a weak-side or high-slot option, while the center stays near the net front. Defensemen remain at separate upper and lower point lanes. The scripted carrier wrap remains the teaching exchange for Blue's Box + 1 reads.
+
+This prototype has no full breakout reads, line changes, or coach-approved tactical scoring. Player targets and spacing are development geometry for review on the published preview; check its current access setting before sharing.

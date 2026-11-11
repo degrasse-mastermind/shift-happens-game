@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="910" viewBox="0 0 320 910" role="img" aria-label="S04 pause 2, 320 pixel design storyboard"><rect x="0" y="0" width="320" height="910" rx="14" fill="#101c31" stroke="none" stroke-width="2"/><text x="20" y="34" font-family="Segoe UI,Arial,sans-serif" font-size="22" fill="#ffffff" font-weight="800">SHIFT HAPPENS!</text><text x="20" y="61" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#7eddeb" font-weight="700">DEFENSEMAN PRACTICE</text><text x="20" y="100" font-family="Segoe UI,Arial,sans-serif" font-size="21" fill="#ffffff" font-weight="700">Partner set. Your next read.</text><text x="20" y="128" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#b9c9df" font-weight="400">Pause 2 of 2 · Make a new choice</text><rect x="20" y="148" width="280" height="40" rx="14" fill="#293851" stroke="none" stroke-width="2"/><text x="32" y="174" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#fff0b4" font-weight="600">DRAFT · Coach review required</text><rect x="20" y="204" width="280" height="270" rx="14" fill="#eaf6fc" stroke="none" stroke-width="2"/><svg x="28" y="212" width="264" height="242" viewBox="0 80 460 630" overflow="hidden">
+  <defs>
+    <g id="end-faceoff" fill="none" stroke="#bb0018" stroke-width="2">
+      <circle r="90"/>
+      <path d="M-14-104v14M14-104v14M-14 90v14M14 90v14"/>
+      <path d="M-32-6h18v-18M-32 6h18v18M32-6H14v-18M32 6H14v18"/>
+      <circle r="8" fill="#fff"/>
+      <path d="M0-8V8" stroke-width="3"/>
+    </g>
+    <g id="neutral-spot">
+      <circle r="9" fill="#bb0018"/>
+      <path d="M0-8V8" stroke="#fff" stroke-width="3"/>
+    </g>
+  </defs>
+
+  <path id="boards" d="M160 90H1100C1180 90 1244 154 1244 234V559C1244 639 1180 704 1100 704H160C80 704 17 639 17 559V234C17 154 80 90 160 90Z" fill="#fff" stroke="#555" stroke-width="5"/>
+
+  <g id="zone-lines" fill="none">
+    <path d="M423 90V704M838 90V704" stroke="#277da4" stroke-width="5"/>
+    <path d="M631 90V704" stroke="#bb0018" stroke-width="5"/>
+    <path d="M99 102V690M1163 102V690" stroke="#bb0018" stroke-width="5"/>
+  </g>
+
+  <g id="goal-creases" fill="#277da4" stroke="#bb0018" stroke-width="2">
+    <path d="M99 360C148 360 148 434 99 434Z"/>
+    <path d="M1163 360C1114 360 1114 434 1163 434Z"/>
+  </g>
+
+  <g id="end-zone-faceoffs">
+    <use href="#end-faceoff" transform="translate(242 244)"/>
+    <use href="#end-faceoff" transform="translate(242 550)"/>
+    <use href="#end-faceoff" transform="translate(1021 244)"/>
+    <use href="#end-faceoff" transform="translate(1021 550)"/>
+  </g>
+
+  <g id="neutral-zone-faceoffs">
+    <use href="#neutral-spot" transform="translate(454 244)"/>
+    <use href="#neutral-spot" transform="translate(454 550)"/>
+    <use href="#neutral-spot" transform="translate(808 244)"/>
+    <use href="#neutral-spot" transform="translate(808 550)"/>
+  </g>
+
+  <g id="center-ice" fill="none" stroke="#277da4">
+    <circle cx="631" cy="397" r="90" stroke-width="2"/>
+    <circle cx="631" cy="397" r="4" fill="#277da4"/>
+  </g>
+
+  <path id="referee-crease" d="M570 704C570 624 692 624 692 704" fill="none" stroke="#bb0018" stroke-width="2"/>
+
+<g font-family="Segoe UI,Arial" font-size="18" font-weight="700" text-anchor="middle"><circle cx="175" cy="395" r="30" fill="#123750" stroke="#123750" stroke-width="3"/><circle cx="175" cy="395" r="37" fill="none" stroke="#123750" stroke-width="4" stroke-dasharray="8 4"/><text x="175" y="401" fill="white">YOU</text><circle cx="130" cy="475" r="23" fill="#123750" stroke="#123750" stroke-width="3"/><text x="130" y="481" fill="white">P</text></g></svg><text x="32" y="462" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#213f57" font-weight="400">Defending zone · P = partner</text><text x="20" y="502" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#d4e0ef" font-weight="600">Your partner is visibly set.</text><text x="20" y="526" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#b9c9df" font-weight="400">Choose your next responsibility.</text><rect x="20" y="548" width="280" height="54" rx="14" fill="#174c60" stroke="#85edf1" stroke-width="2"/><text x="34" y="581" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="700">[Selected] Take the containment job</text><rect x="20" y="614" width="280" height="54" rx="14" fill="#1b2b43" stroke="#53657e" stroke-width="2"/><text x="34" y="647" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#ffffff" font-weight="400">[ ] Keep the same job</text><rect x="20" y="690" width="280" height="52" rx="14" fill="#85edf1" stroke="none" stroke-width="2"/><text x="105" y="723" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#092735" font-weight="700">Confirm choice</text><text x="20" y="772" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#85edf1" font-weight="700">SELECTED STATE · Not scored</text><text x="20" y="799" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#eff6ff" font-weight="400">Then: review the full exchange.</text><text x="20" y="823" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#eff6ff" font-weight="400">Guided retry: free. Fresh variation:</text><text x="20" y="847" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#eff6ff" font-weight="400">unassisted mastery check.</text><text x="20" y="884" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#b9c9df" font-weight="400">Visual storyboard only · No live controls</text></svg>

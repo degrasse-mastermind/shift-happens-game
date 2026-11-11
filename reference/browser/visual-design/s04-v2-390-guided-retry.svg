@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="1280" viewBox="0 0 390 1280" role="img" aria-label="Proposed S04 retry pause 1 for David coaching review"><defs><clipPath id="context-clip-390-6" clipPathUnits="userSpaceOnUse"><rect x="20" y="228" width="350" height="78"/></clipPath><clipPath id="detail-clip-390-6" clipPathUnits="userSpaceOnUse"><rect x="26" y="348" width="338" height="367"/></clipPath></defs><rect x="0" y="0" width="390" height="1280" rx="14" fill="#0d1c32" stroke="none" stroke-width="2"/><text x="20" y="35" font-family="Segoe UI,Arial,sans-serif" font-size="23" fill="#ffffff" font-weight="800">SHIFT HAPPENS!</text><text x="20" y="64" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#86e8f1" font-weight="700">DEFENSEMAN PRACTICE</text><text x="20" y="103" font-family="Segoe UI,Arial,sans-serif" font-size="25" fill="#ffffff" font-weight="700">Try the read again</text><text x="20" y="133" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#edf6ff" font-weight="400">7 / 9  •  Guided practice</text><rect x="20" y="151" width="350" height="65" rx="14" fill="#35405a" stroke="none" stroke-width="2"/><text x="32" y="176" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#ffe0a0" font-weight="700">PROPOSED • NOT APPROVED</text><text x="32" y="199" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#ffe9bc" font-weight="400">For David's coaching review</text><g clip-path="url(#context-clip-390-6)"><svg x="20" y="228" width="350" height="78" viewBox="0 70 1260 650">
+  <defs>
+    <g id="end-faceoff" fill="none" stroke="#bb0018" stroke-width="2">
+      <circle r="90"/>
+      <path d="M-14-104v14M14-104v14M-14 90v14M14 90v14"/>
+      <path d="M-32-6h18v-18M-32 6h18v18M32-6H14v-18M32 6H14v18"/>
+      <circle r="8" fill="#fff"/>
+      <path d="M0-8V8" stroke-width="3"/>
+    </g>
+    <g id="neutral-spot">
+      <circle r="9" fill="#bb0018"/>
+      <path d="M0-8V8" stroke="#fff" stroke-width="3"/>
+    </g>
+  </defs>
+
+  <path id="boards" d="M160 90H1100C1180 90 1244 154 1244 234V559C1244 639 1180 704 1100 704H160C80 704 17 639 17 559V234C17 154 80 90 160 90Z" fill="#fff" stroke="#555" stroke-width="5"/>
+
+  <g id="zone-lines" fill="none">
+    <path d="M423 90V704M838 90V704" stroke="#277da4" stroke-width="5"/>
+    <path d="M631 90V704" stroke="#bb0018" stroke-width="5"/>
+    <path d="M99 102V690M1163 102V690" stroke="#bb0018" stroke-width="5"/>
+  </g>
+
+  <g id="goal-creases" fill="#277da4" stroke="#bb0018" stroke-width="2">
+    <path d="M99 360C148 360 148 434 99 434Z"/>
+    <path d="M1163 360C1114 360 1114 434 1163 434Z"/>
+  </g>
+
+  <g id="end-zone-faceoffs">
+    <use href="#end-faceoff" transform="translate(242 244)"/>
+    <use href="#end-faceoff" transform="translate(242 550)"/>
+    <use href="#end-faceoff" transform="translate(1021 244)"/>
+    <use href="#end-faceoff" transform="translate(1021 550)"/>
+  </g>
+
+  <g id="neutral-zone-faceoffs">
+    <use href="#neutral-spot" transform="translate(454 244)"/>
+    <use href="#neutral-spot" transform="translate(454 550)"/>
+    <use href="#neutral-spot" transform="translate(808 244)"/>
+    <use href="#neutral-spot" transform="translate(808 550)"/>
+  </g>
+
+  <g id="center-ice" fill="none" stroke="#277da4">
+    <circle cx="631" cy="397" r="90" stroke-width="2"/>
+    <circle cx="631" cy="397" r="4" fill="#277da4"/>
+  </g>
+
+  <path id="referee-crease" d="M570 704C570 624 692 624 692 704" fill="none" stroke="#bb0018" stroke-width="2"/>
+
+<rect x="17" y="90" width="406" height="614" fill="#17b8c2" fill-opacity=".22" stroke="#0d6670" stroke-width="12"/></svg></g><text x="20" y="326" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#b9d5e7" font-weight="400">Defending LEFT • zone detail below</text><rect x="20" y="342" width="350" height="382" rx="14" fill="#edf8fc" stroke="none" stroke-width="2"/><g clip-path="url(#detail-clip-390-6)"><svg x="26" y="348" width="338" height="367" viewBox="0 70 460 650">
+  <defs>
+    <g id="end-faceoff" fill="none" stroke="#bb0018" stroke-width="2">
+      <circle r="90"/>
+      <path d="M-14-104v14M14-104v14M-14 90v14M14 90v14"/>
+      <path d="M-32-6h18v-18M-32 6h18v18M32-6H14v-18M32 6H14v18"/>
+      <circle r="8" fill="#fff"/>
+      <path d="M0-8V8" stroke-width="3"/>
+    </g>
+    <g id="neutral-spot">
+      <circle r="9" fill="#bb0018"/>
+      <path d="M0-8V8" stroke="#fff" stroke-width="3"/>
+    </g>
+  </defs>
+
+  <path id="boards" d="M160 90H1100C1180 90 1244 154 1244 234V559C1244 639 1180 704 1100 704H160C80 704 17 639 17 559V234C17 154 80 90 160 90Z" fill="#fff" stroke="#555" stroke-width="5"/>
+
+  <g id="zone-lines" fill="none">
+    <path d="M423 90V704M838 90V704" stroke="#277da4" stroke-width="5"/>
+    <path d="M631 90V704" stroke="#bb0018" stroke-width="5"/>
+    <path d="M99 102V690M1163 102V690" stroke="#bb0018" stroke-width="5"/>
+  </g>
+
+  <g id="goal-creases" fill="#277da4" stroke="#bb0018" stroke-width="2">
+    <path d="M99 360C148 360 148 434 99 434Z"/>
+    <path d="M1163 360C1114 360 1114 434 1163 434Z"/>
+  </g>
+
+  <g id="end-zone-faceoffs">
+    <use href="#end-faceoff" transform="translate(242 244)"/>
+    <use href="#end-faceoff" transform="translate(242 550)"/>
+    <use href="#end-faceoff" transform="translate(1021 244)"/>
+    <use href="#end-faceoff" transform="translate(1021 550)"/>
+  </g>
+
+  <g id="neutral-zone-faceoffs">
+    <use href="#neutral-spot" transform="translate(454 244)"/>
+    <use href="#neutral-spot" transform="translate(454 550)"/>
+    <use href="#neutral-spot" transform="translate(808 244)"/>
+    <use href="#neutral-spot" transform="translate(808 550)"/>
+  </g>
+
+  <g id="center-ice" fill="none" stroke="#277da4">
+    <circle cx="631" cy="397" r="90" stroke-width="2"/>
+    <circle cx="631" cy="397" r="4" fill="#277da4"/>
+  </g>
+
+  <path id="referee-crease" d="M570 704C570 624 692 624 692 704" fill="none" stroke="#bb0018" stroke-width="2"/>
+
+<path d="M99 369L67 377Q52 397 67 417L99 425Z" fill="#fbe4e6" stroke="#9b1730" stroke-width="5"/><path d="M99 369V425" stroke="#5e1021" stroke-width="6"/><path d="M69 383L95 412M69 411L95 382M64 397H98" fill="none" stroke="#b96672" stroke-width="2"/><text x="104" y="450" font-family="Arial,sans-serif" font-size="23" font-weight="700" fill="#7b1c2e">NET</text><ellipse cx="185" cy="397" rx="64" ry="98" fill="#13b3bb" fill-opacity=".18" stroke="#126574" stroke-width="4" stroke-dasharray="10 6"/><rect x="298" y="568" width="54" height="54" rx="7" fill="#ac3252" stroke="#711a30" stroke-width="3"/><text x="325" y="604" text-anchor="middle" font-family="Arial" font-size="25" font-weight="700" fill="white">O1</text><rect x="228" y="228" width="54" height="54" rx="7" fill="#ac3252" stroke="#711a30" stroke-width="3"/><text x="255" y="264" text-anchor="middle" font-family="Arial" font-size="25" font-weight="700" fill="white">O2</text><circle cx="365" cy="619" r="12" fill="#111" stroke="white" stroke-width="4"/><circle cx="190" cy="365" r="40" fill="none" stroke="#072c4a" stroke-width="4" stroke-dasharray="7 5"/><circle cx="190" cy="365" r="29" fill="#123d59"/><text x="190" y="374" text-anchor="middle" font-family="Arial" font-size="25" font-weight="700" fill="white">Y</text><circle cx="370" cy="430" r="29" fill="#123d59"/><text x="370" y="439" text-anchor="middle" font-family="Arial" font-size="25" font-weight="700" fill="white">P</text><path d="M355 475Q280 540 215 480" fill="none" stroke="#123d59" stroke-width="4" stroke-dasharray="10 7"/><path d="M218 500L215 480L236 482" fill="none" stroke="#123d59" stroke-width="4"/></svg></g><text x="20" y="750" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#e5effb" font-weight="600">Y = you (ring)   P = partner</text><text x="20" y="776" font-family="Segoe UI,Arial,sans-serif" font-size="15" fill="#c9d8ec" font-weight="400">O = opponent (square)   • = puck</text><text x="20" y="810" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#ffffff" font-weight="600">Hint: check P before leaving net</text><text x="20" y="833" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#ffffff" font-weight="600">front.</text><rect x="20" y="890" width="350" height="66" rx="14" fill="#192c46" stroke="#61748d" stroke-width="2"/><text x="33" y="914" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#b8c9e0" font-weight="700">OPTION 1</text><text x="33" y="939" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="white" font-weight="600">Hold net-front coverage</text><rect x="20" y="968" width="350" height="66" rx="14" fill="#192c46" stroke="#61748d" stroke-width="2"/><text x="33" y="992" font-family="Segoe UI,Arial,sans-serif" font-size="12" fill="#b8c9e0" font-weight="700">OPTION 2</text><text x="33" y="1017" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="white" font-weight="600">Take containment now</text><rect x="20" y="1058" width="350" height="56" rx="14" fill="#30415a" stroke="none" stroke-width="2"/><text x="34" y="1093" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#cbd9e9" font-weight="700">Select an answer first</text><text x="20" y="1150" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#c9d8ec" font-weight="400">Guided retries are free. Earned</text><text x="20" y="1172" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#c9d8ec" font-weight="400">progress stays. This attempt is not</text><text x="20" y="1194" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#c9d8ec" font-weight="400">mastery evidence.</text><text x="20" y="1254" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#9db2ca" font-weight="600">VISUAL DESIGN • No live controls</text></svg>
