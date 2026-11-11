@@ -4,6 +4,7 @@ namespace ShiftHappens
 {
     internal static class BehindNetRotation
     {
+        private const float FarPostY = 491f;
         internal static readonly Vector2 ExitPost = new(120, 435);
         internal static readonly Vector2 SlotSupport = new(229, 397);
         internal static readonly Vector2 ExitSupport = new(237, 466);
@@ -15,7 +16,8 @@ namespace ShiftHappens
         };
 
         internal static bool Exited(Vector2 carrier) => carrier.x >= 122 && carrier.y > 475;
-        internal static bool BehindGoal(Vector2 carrier) => carrier.x < 99 && carrier.y > 315 && carrier.y < 491;
+        internal static bool BehindGoal(Vector2 carrier) => carrier.x < 99 && carrier.y > 315 && carrier.y < FarPostY;
+        internal static bool PastFarPost(Vector2 carrier) => carrier.y >= FarPostY;
 
         internal static Vector2 CarrierAt(Vector2 start, float time, float wait)
         {

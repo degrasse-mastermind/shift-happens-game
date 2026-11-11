@@ -144,6 +144,7 @@ namespace ShiftHappens.Editor
                 },
                 replay => replay.Stage != PracticeShift.Phase.Carry ? replay.Message
                     : replay.BehindNetExitAt.HasValue ? "RD moves out. LD is responsible for Red C."
+                    : replay.BehindNetPastFarPost ? "Red rounds the far post. Keep Red C covered."
                     : replay.BehindNetCrossing ? "Red crosses behind the net. Watch both posts and the slot."
                     : "Red approaches the goal line. Watch LD and the slot.",
                 guided: true);

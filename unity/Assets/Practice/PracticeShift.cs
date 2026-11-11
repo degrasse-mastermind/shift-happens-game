@@ -50,6 +50,7 @@ namespace ShiftHappens
         public float? BehindNetExitAt { get; private set; }
         public bool BehindNetScenario => settings.BehindNetCarry;
         public bool BehindNetCrossing => BehindNetScenario && BehindNetRotation.BehindGoal(settings.Map(Carrier));
+        public bool BehindNetPastFarPost => BehindNetScenario && BehindNetRotation.PastFarPost(settings.Map(Carrier));
         public bool ContainmentAvailable => PartnerHasCoverage && IsCarrierWindow && Carrier.y < 397f;
         public bool Containing { get; private set; }
         public ReadResult HoldRead { get; private set; }
