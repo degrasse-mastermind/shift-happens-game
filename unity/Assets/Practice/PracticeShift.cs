@@ -12,11 +12,14 @@ namespace ShiftHappens
 
         private const float DecisionTime = 14f;
         private const float SkateSpeed = 53f;
-        private const float PassSpeed = 150f;
+        internal const float PassSpeed = 150f;
         private const float TieDuration = 2.5f;
-        private static readonly Vector2[] CarrierRoute = {
-            new(230, 315), new(205, 255), new(180, 215),
+        private static readonly Vector2[] StandardCarrierWaypoints = {
+            new(205, 255), new(180, 215),
             new(175, 190), new(210, 220), new(190, 235)
+        };
+        private static readonly Vector2[] CornerCarrierWaypoints = {
+            new(132, 190), new(177, 215), new(183, 205), new(203, 221), new(190, 235)
         };
         private static readonly float[] RouteTimes = {0f, 3f, 6f, 9f, 12f, DecisionTime};
 
@@ -25,14 +28,24 @@ namespace ShiftHappens
         public enum Possession { RedCarrier, InFlight, Loose, Blue, Goalie, None }
         public Phase Stage { get; private set; } = Phase.Ready;
         public int Seed { get; }
+        internal bool Mirrored => settings.Mirror;
         public float Time { get; private set; }
         public Vector2 Player { get; private set; }
         public Vector2 Carrier { get; private set; }
         public Vector2 Puck { get; private set; }
         public Vector2 Partner { get; private set; }
         public Vector2 PartnerFacing { get; private set; } = Vector2.up;
-        public Vector2 NetFrontAttacker => settings.Map(Center);
+        public Vector2 NetFrontAttacker => skating.Slot;
+        public Vector2 BlueCenter => skating.Center;
+        public Vector2 BlueLeftWing => skating.UpperWing;
+        public Vector2 BlueRightWing => skating.LowerWing;
+        public Vector2 RedSupport => skating.Support;
+        public Vector2 RedRightDefense => skating.UpperPoint;
+        public Vector2 RedLeftDefense => skating.LowerPoint;
+        public Vector2 RedGoalie => skating.RedGoalie;
         public bool PartnerHasCoverage { get; private set; }
+        public bool PartnerArrivedWrongSide => Vector2.Distance(Partner, PartnerCoverageTarget) <= 5f &&
+            settings.Map(Partner).x >= settings.Map(NetFrontAttacker).x;
         public float? HandoffAt { get; private set; }
         public bool ContainmentAvailable => PartnerHasCoverage && IsCarrierWindow && Carrier.y < 397f;
         public bool Containing { get; private set; }
@@ -45,27 +58,66 @@ namespace ShiftHappens
         public bool Tied => Time < tiedUntil;
         public bool SlotFeed => slotFeed;
         public bool Paused { get; private set; }
-        public bool CanSkate => Stage != Phase.Ready && Stage != Phase.Finished && !Paused && !TeachingPaused;
-        public Vector2 Destination => settings.Map(SlotFeed ? Center : Point);
+        public bool Reviewing { get; private set; }
+        public void SetReviewing(bool active) => Reviewing = active;
+        public bool CanSkate => !Reviewing && Stage != Phase.Ready && Stage != Phase.Finished && !Paused && !TeachingPaused;
+        public Vector2 Destination => Stage == Phase.Pass ? passTarget :
+            SlotFeed ? NetFrontAttacker : PointReceiver;
+        public string PassReceiver => SlotFeed ? settings.NetFrontLabel : toUpperPoint ? "RD" : "LD";
+        public bool SlotLaneCovered => NetFrontLaneCovered();
         public Vector2 Goalie { get; private set; }
-        public string DraftReview => $"DRAFT  Hold: {HoldRead}  |  Contain: {ContainRead}";
+        public string ScoreSummary => $"FINAL SCORE  Hold: {HoldRead}{(openedSlotBeforeHandoff ? " (left net front and opened slot)" : "")}  |  Contain: {ContainRead}";
+        public string PositioningSummary
+        {
+            get
+            {
+                if (Stage != Phase.Ready && !IsCarrierWindow)
+                    return "Inside-shoulder positioning is reviewed while Red carries.";
+                Vector2 net = settings.Map(ZoneSkating.BlueNet);
+                string Shoulder(Vector2 defender, Vector2 threat) =>
+                    ZoneSkating.InsideShoulderDepth(defender, threat, net) > 0f ? "inside" : "outside";
+                return $"Inside shoulder   LD (draft) {Shoulder(Player, ContainmentAvailable ? Carrier : NetFrontAttacker)}   " +
+                    $"RD (final) {Shoulder(Partner, NetFrontAttacker)}   C {Shoulder(BlueCenter, RedSupport)}   " +
+                    $"LW {Shoulder(BlueLeftWing, RedRightDefense)}   RW {Shoulder(BlueRightWing, RedLeftDefense)}";
+            }
+        }
 
         private Vector2 target = StartPosition;
         private float passAt;
         private float tiedUntil;
         private float tieReadyAt;
         private Vector2 shotTarget;
+        private Vector2 passTarget;
+        private bool toUpperPoint = true;
         private readonly DraftShiftSettings settings;
+        private readonly ZoneSkating skating;
         private float coverageStableTime;
         private float holdEligibleTime;
         private float holdCoveredTime;
         private float containEligibleTime;
-        private float containedTime;
+        private float containStreakTime;
+        private bool completedContainStreak;
         private float openLaneTime;
         private float looseAt;
         private float pickupTime;
         private bool teachingShown;
         private bool slotFeed;
+        private bool openedSlotBeforeHandoff;
+        private Vector2 PartnerCoverageTarget
+        {
+            get
+            {
+                Vector2 threat = NetFrontAttacker;
+                Vector2 localTarget = settings.Map(threat) + settings.PartnerCoverageOffset;
+                if (settings.PartnerCoverageOffset.x < 0f) localTarget.x = Mathf.Max(150f, localTarget.x);
+                Vector2 target = settings.Map(localTarget);
+                // A rink-side offset intentionally lets the wrong-side drill test a missed assignment.
+                return settings.PartnerCoverageOffset.x < 0f
+                    ? ZoneSkating.InsideShoulderTarget(target, threat, settings.Map(ZoneSkating.BlueNet))
+                    : target;
+            }
+        }
+        private Vector2 PointReceiver => toUpperPoint ? RedRightDefense : RedLeftDefense;
         private bool IsCarrierWindow => PuckPossession == Possession.RedCarrier &&
             (Stage == Phase.Carry || Stage == Phase.Warning);
 
@@ -74,17 +126,21 @@ namespace ShiftHappens
             Seed = seed;
             Guided = guided;
             settings = (scenario ?? new DraftShiftSettings()).Copy();
-            Player = settings.Map(StartPosition);
+            skating = new ZoneSkating(settings, seed);
+            Player = settings.Map(settings.PlayerStart);
             target = Player;
-            Carrier = settings.Map(CarrierRoute[0]);
+            Carrier = settings.Map(settings.CarrierStart);
             Partner = settings.Map(settings.PartnerStart);
-            Puck = Carrier + new Vector2(settings.Mirror ? 17 : -17, 9);
-            Goalie = settings.Map(new Vector2(105, 397));
+            Puck = settings.Map(settings.PuckStart);
+            if (settings.CornerCarry)
+                Message = $"Red {settings.CarrierLabel} has the puck in the upper corner. Protect the lane to Red {settings.NetFrontLabel}.";
+            Goalie = settings.Map(ZoneSkating.BlueNet);
             slotFeed = (seed & 1) == 1;
         }
 
         public void TogglePlay()
         {
+            if (Reviewing) return;
             if (Stage == Phase.Ready) Stage = Phase.Carry;
             else if (TeachingPaused)
             {
@@ -96,6 +152,7 @@ namespace ShiftHappens
 
         public void SkateTo(Vector2 icePoint)
         {
+            if (Reviewing) return;
             target = new Vector2(Mathf.Clamp(icePoint.x, 55, 1205), Mathf.Clamp(icePoint.y, 120, 675));
         }
 
@@ -109,12 +166,12 @@ namespace ShiftHappens
             }
             if (Vector2.Distance(Player, NetFrontAttacker) > StickReach)
             {
-                Message = "Skate closer to Red C to tie him up.";
+                Message = $"Skate closer to Red {settings.NetFrontLabel} to tie up the receiver.";
                 return;
             }
             tiedUntil = Time + TieDuration;
             tieReadyAt = Time + 3.5f;
-            Message = "Red C tied up. Hold your position.";
+            Message = $"Red {settings.NetFrontLabel} tied up. Hold your position.";
         }
 
         public void Step(float dt)
@@ -135,6 +192,10 @@ namespace ShiftHappens
             Time += dt;
             Player = Vector2.MoveTowards(Player, target, SkateSpeed * dt);
             if (Tied && Vector2.Distance(Player, NetFrontAttacker) > 90f) tiedUntil = Time;
+            if (Stage == Phase.Carry) SkateCarrier();
+            skating.Step(dt, Time, Puck, Player, Partner, CenterSupportsContain(), Tied, Stage == Phase.LoosePuck,
+                Stage == Phase.Pass && SlotFeed ? passTarget : null,
+                Stage == Phase.Pass && !SlotFeed ? passTarget : null, toUpperPoint);
             Goalie = new Vector2(Goalie.x, Mathf.MoveTowards(Goalie.y,
                 Mathf.Clamp(Stage == Phase.Shot ? shotTarget.y : Puck.y, 365f, 429f),
                 (Stage == Phase.Shot ? 12f : 20f) * dt));
@@ -152,17 +213,17 @@ namespace ShiftHappens
             switch (Stage)
             {
                 case Phase.Carry:
-                    SkateCarrier();
                     if (openLaneTime >= 0.5f && Time >= 1.5f)
                     {
+                        if (!HandoffAt.HasValue) openedSlotBeforeHandoff = true;
                         slotFeed = true;
                         WarnForPass("The middle opened. Red looks for the net-front pass.");
                         break;
                     }
-                    if (Containing && containedTime >= settings.ContainHoldTime)
+                    if (Containing && completedContainStreak)
                     {
                         slotFeed = false;
-                        ReleasePass("LD closes from inside. Red cycles to the point.");
+                        ReleasePass(contained: true);
                         break;
                     }
                     if (Time < DecisionTime) break;
@@ -176,7 +237,10 @@ namespace ShiftHappens
                     Vector2 previous = Puck;
                     Puck = Vector2.MoveTowards(Puck, Destination, PassSpeed * dt);
                     if (DistanceToLane(Player, previous, Puck) < 18f ||
-                        DistanceToLane(Partner, previous, Puck) < 18f)
+                        DistanceToLane(Partner, previous, Puck) < 18f ||
+                        DistanceToLane(BlueCenter, previous, Puck) < 16f ||
+                        DistanceToLane(BlueLeftWing, previous, Puck) < 16f ||
+                        DistanceToLane(BlueRightWing, previous, Puck) < 16f)
                     {
                         DeflectPass("Blue's stick breaks up the passing lane. Recover the loose puck.");
                         break;
@@ -188,9 +252,15 @@ namespace ShiftHappens
                             : "Net-front coverage denies the reception. Recover the loose puck.");
                         break;
                     }
+                    Vector2 receiver = SlotFeed ? NetFrontAttacker : PointReceiver;
+                    if (Vector2.Distance(receiver, Puck) > 25f)
+                    {
+                        DeflectPass("The pass misses the receiver's stick. Recover the loose puck.");
+                        break;
+                    }
                     shotTarget = settings.Map(new Vector2(99, SlotFeed ? 373 : 397));
                     Stage = Phase.Shot;
-                    Message = SlotFeed ? "Red C shoots from the slot." : "Red shoots from the point.";
+                    Message = SlotFeed ? $"Red {PassReceiver} shoots from the slot." : $"Red {PassReceiver} shoots from the point.";
                     break;
                 case Phase.LoosePuck:
                     pickupTime = Vector2.Distance(Player, Puck) < 30f ? pickupTime + dt : 0;
@@ -215,35 +285,55 @@ namespace ShiftHappens
 
         private void SkateCarrier()
         {
+            Vector2[] waypoints = settings.CornerCarry ? CornerCarrierWaypoints : StandardCarrierWaypoints;
             for (int i = 1; i < RouteTimes.Length; i++)
             {
                 if (Time > RouteTimes[i] && i < RouteTimes.Length - 1) continue;
                 float progress = Mathf.InverseLerp(RouteTimes[i - 1], RouteTimes[i], Time);
-                Carrier = settings.Map(Vector2.Lerp(CarrierRoute[i - 1], CarrierRoute[i], progress));
-                Puck = Carrier + new Vector2(settings.Mirror ? 17 : -17, 9);
+                Vector2 start = i == 1 ? settings.CarrierStart : waypoints[i - 2];
+                Vector2 carrierPosition = Vector2.Lerp(start, waypoints[i - 1], progress);
+                Vector2 puckOffset = Vector2.Lerp(settings.PuckStart - settings.CarrierStart,
+                    new Vector2(-17, 9), Mathf.Clamp01(Time / RouteTimes[1]));
+                Carrier = settings.Map(carrierPosition);
+                Puck = settings.Map(carrierPosition + puckOffset);
                 break;
             }
         }
 
-        private void ReleasePass(string message = null)
+        private void ReleasePass(bool contained = false)
         {
             // A covered slot changes the attacking choice, including the seed-1 comparison branch.
             if (SlotFeed && NetFrontLaneCovered()) slotFeed = false;
+            if (!SlotFeed)
+                toUpperPoint = OutletScore(RedRightDefense) >= OutletScore(RedLeftDefense);
+            passTarget = SlotFeed ? NetFrontAttacker : PointReceiver;
             Stage = Phase.Pass;
             PuckPossession = Possession.InFlight;
             Containing = false;
             FinalizeReads();
-            Message = message ?? (SlotFeed ? "Red passes to Red C." : "Red cycles the puck to the point.");
+            Message = (contained ? "LD closes from inside. " : "") +
+                (SlotFeed ? $"Red passes to Red {PassReceiver}." : $"Red cycles to Red {PassReceiver} at the point.");
+        }
+
+        private float OutletScore(Vector2 outlet)
+        {
+            float defense = Mathf.Min(
+                Mathf.Min(DistanceToLane(Player, Puck, outlet), DistanceToLane(Partner, Puck, outlet)),
+                Mathf.Min(DistanceToLane(BlueCenter, Puck, outlet),
+                    Mathf.Min(DistanceToLane(BlueLeftWing, Puck, outlet), DistanceToLane(BlueRightWing, Puck, outlet))));
+            return defense - Vector2.Distance(Puck, outlet) * 0.07f;
         }
 
         private void MovePartner(float dt)
         {
-            Vector2 coverageTarget = settings.Map(Center + settings.PartnerCoverageOffset);
             if (Time >= settings.PartnerReturnDelay)
-                Partner = Vector2.MoveTowards(Partner, coverageTarget, settings.PartnerReturnSpeed * dt);
+                Partner = Vector2.MoveTowards(Partner, PartnerCoverageTarget, settings.PartnerReturnSpeed * dt);
             Vector2 lookTarget = (Puck + NetFrontAttacker) * 0.5f;
             Vector2 direction = (lookTarget - Partner).normalized;
-            PartnerFacing = Vector3.RotateTowards(PartnerFacing, direction, 3f * dt, 0f);
+            float facing = Mathf.Atan2(PartnerFacing.y, PartnerFacing.x) * Mathf.Rad2Deg;
+            float bearing = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            float turned = Mathf.MoveTowardsAngle(facing, bearing, 3f * Mathf.Rad2Deg * dt) * Mathf.Deg2Rad;
+            PartnerFacing = new Vector2(Mathf.Cos(turned), Mathf.Sin(turned));
             bool positioned = CoversNetFront(Partner) && Vector2.Dot(PartnerFacing, direction) > 0.5f;
             coverageStableTime = positioned ? coverageStableTime + dt : 0;
             bool established = positioned && coverageStableTime >= settings.CoverageSettleTime;
@@ -262,39 +352,57 @@ namespace ShiftHappens
         private void ObserveDecisions(float dt)
         {
             Containing = ContainmentAvailable && InsideContainment();
+            containStreakTime = Containing ? containStreakTime + dt : 0;
+            if (Containing && (containStreakTime >= settings.ContainHoldTime ||
+                Mathf.Approximately(containStreakTime, settings.ContainHoldTime)))
+                completedContainStreak = true;
             if (!IsCarrierWindow) return;
             bool covered = NetFrontLaneCovered();
             openLaneTime = covered ? 0 : openLaneTime + dt;
             if (!HandoffAt.HasValue)
             {
                 holdEligibleTime += dt;
-                if (CoversNetFront(Player)) holdCoveredTime += dt;
+                if (PlayerCoversNetFront()) holdCoveredTime += dt;
             }
-            if (ContainmentAvailable)
-            {
-                containEligibleTime += dt;
-                if (Containing) containedTime += dt;
-            }
+            if (ContainmentAvailable) containEligibleTime += dt;
         }
 
         private bool CoversNetFront(Vector2 defender)
         {
             Vector2 local = settings.Map(defender);
-            return local.x >= 150f && local.x <= Center.x - settings.GoalSideMargin &&
+            return local.x >= 150f && local.x <= settings.Map(NetFrontAttacker).x - settings.GoalSideMargin &&
                 Vector2.Distance(defender, NetFrontAttacker) <= settings.CoverageReach &&
                 DistanceToLane(defender, Puck, NetFrontAttacker) <= settings.LaneReach;
         }
 
-        private bool InsideContainment()
+        private bool PlayerCoversNetFront()
+        {
+            // In the marked setup LD starts up the lane from LW and guards the feed from inside.
+            if (!settings.HoldFromPassingLane) return CoversNetFront(Player);
+            return settings.Map(Player).x <= settings.Map(NetFrontAttacker).x - settings.GoalSideMargin &&
+                DistanceToLane(Player, Puck, NetFrontAttacker) <= settings.LaneReach;
+        }
+
+        private bool CenterSupportsContain()
+        {
+            if (!ContainmentAvailable || !OnInsideLane()) return false;
+            float range = Vector2.Distance(Player, Carrier);
+            float holdRange = Vector2.Distance(settings.Map(settings.PlayerStart), Carrier);
+            return range <= settings.ContainDistance || range + 10f < holdRange;
+        }
+
+        private bool InsideContainment() => OnInsideLane() &&
+            Vector2.Distance(Player, Carrier) <= settings.ContainDistance;
+
+        private bool OnInsideLane()
         {
             Vector2 localPlayer = settings.Map(Player);
             Vector2 localCarrier = settings.Map(Carrier);
             return localPlayer.x <= localCarrier.x + 10f &&
-                Vector2.Distance(Player, Carrier) <= settings.ContainDistance &&
                 DistanceToLane(Player, Carrier, NetFrontAttacker) <= settings.LaneReach;
         }
 
-        private bool NetFrontLaneCovered() => CoversNetFront(Player) || PartnerHasCoverage;
+        private bool NetFrontLaneCovered() => PlayerCoversNetFront() || PartnerHasCoverage;
 
         private static float DistanceToLane(Vector2 point, Vector2 start, Vector2 end)
         {
@@ -323,11 +431,12 @@ namespace ShiftHappens
             if (HoldRead == ReadResult.Pending)
                 HoldRead = EvaluateHold();
             if (ContainRead == ReadResult.Pending)
-                ContainRead = containedTime > 0 && containedTime >= settings.ContainHoldTime ? ReadResult.Met
+                ContainRead = completedContainStreak ? ReadResult.Met
                     : containEligibleTime < settings.ContainHoldTime + 0.5f ? ReadResult.Unobserved : ReadResult.Missed;
         }
 
-        private ReadResult EvaluateHold() => holdEligibleTime < 0.5f ? ReadResult.Unobserved
+        private ReadResult EvaluateHold() => openedSlotBeforeHandoff ? ReadResult.Missed
+            : holdEligibleTime < 0.5f ? ReadResult.Unobserved
             : holdCoveredTime / holdEligibleTime >= settings.RequiredHoldCoverage ? ReadResult.Met : ReadResult.Missed;
 
         private void Finish(string message)

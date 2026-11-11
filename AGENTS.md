@@ -41,6 +41,7 @@ Then inspect and reuse the existing Unity work. Build the sequence so the player
 - Inspect the current implementation and repository instructions before making changes. Preserve existing code, assets, documentation and useful prototypes. Avoid unnecessary rewrites.
 - Separate hockey simulation, team behavior, player input, lesson triggers and presentation. Make scenarios and coaching criteria editable where practical.
 - Use repeatable setups for testing and retries. Keep pause, resume, restart and replay consistent with actual game state.
+- Make each gameplay playtest viewable on David's Unity Game screen. Provide a repeatable live replay of the reported scenario, including the setup and scripted inputs, and leave the run ready to watch again.
 - Test puck ownership, passes, loose pucks, shots, role handoffs, teaching triggers and retries. Verify that choices affect outcomes and feedback matches what happened.
 - Test mirrored and unfamiliar variations to distinguish learning from memorization.
 - Validate desktop and phone separately. Editor testing alone does not establish standalone or mobile readiness.

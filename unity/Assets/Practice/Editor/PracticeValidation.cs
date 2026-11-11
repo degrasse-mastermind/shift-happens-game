@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -8,6 +9,7 @@ namespace ShiftHappens.Editor
 {
     public static class PracticeValidation
     {
+        [MenuItem("Tools/Shift Happens/Validate Draft Practice")]
         public static void Run()
         {
             try
@@ -19,7 +21,16 @@ namespace ShiftHappens.Editor
                 CheckPauseAndRetry();
                 CheckLoosePuck();
                 CheckMissedContainment();
-                Debug.Log("PRACTICE_CHECKS_PASSED (7 scenarios)");
+                CheckMarkedStartingPositions();
+                CheckResponsiveSkating(new DraftShiftSettings());
+                CheckResponsiveSkating(DraftShiftSettings.MarkedPreset());
+                CheckInterruptedContainment(new DraftShiftSettings());
+                CheckInterruptedContainment(DraftShiftSettings.MarkedPreset());
+                CheckSupportPositions(new DraftShiftSettings());
+                CheckSupportPositions(DraftShiftSettings.MarkedPreset());
+                CheckPointLaneCut(LateCenterSettings(), upperPoint: false);
+                CheckPointLaneCut(new DraftShiftSettings(), upperPoint: true);
+                Debug.Log("PRACTICE_CHECKS_PASSED (16 checks)");
             }
             catch (Exception exception)
             {
@@ -46,6 +57,462 @@ namespace ShiftHappens.Editor
             Debug.Log($"PRACTICE_WINDOWS_BUILD_PASSED {report.summary.totalSize} bytes");
         }
 
+        public static void BuildPhonePreview()
+        {
+            string destination = Environment.GetEnvironmentVariable("SHIFT_HAPPENS_PHONE_PREVIEW");
+            Require(!string.IsNullOrWhiteSpace(destination), "Set the local phone preview destination.");
+            Run();
+            var previousCompression = PlayerSettings.WebGL.compressionFormat;
+            try
+            {
+                PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+                BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = Array.ConvertAll(Array.FindAll(EditorBuildSettings.scenes, scene => scene.enabled), scene => scene.path),
+                    locationPathName = destination,
+                    target = BuildTarget.WebGL,
+                    options = BuildOptions.StrictMode,
+                });
+                Require(report.summary.result == BuildResult.Succeeded, $"Phone preview build result: {report.summary.result}");
+                Debug.Log($"PRACTICE_PHONE_PREVIEW_BUILD_PASSED {report.summary.totalSize} bytes");
+            }
+            finally
+            {
+                PlayerSettings.WebGL.compressionFormat = previousCompression;
+            }
+        }
+
+        [MenuItem("Tools/Shift Happens/Playtest Weak-Side Cycle")]
+        public static void PlaytestWeakSideCycle()
+        {
+            Vector2[] standardApproach = { new(-12, 60) };
+            float[] immediate = { 0f };
+            PlaytestPointCycle(new DraftShiftSettings(), "Original", standardApproach, immediate, 64);
+            PlaytestPointCycle(DraftShiftSettings.MarkedPreset(), "Marked", standardApproach, immediate, 64);
+            Vector2[] variedApproaches = { new(-48, 28), new(-32, 50), new(-12, 35), new(-12, 70), new(5, 50), new(5, 70) };
+            float[] delays = { 0f, 1f, 3f, 5f };
+            PlaytestPointCycle(DraftShiftSettings.MarkedPreset(), "Marked_varied", variedApproaches, delays, 32);
+
+            PlaytestPointCycle(LateCenterSettings(), "Marked_late_C", standardApproach, immediate, 32);
+        }
+
+        [MenuItem("Tools/Shift Happens/Playtest Puck-Side Point")]
+        public static void PlaytestPuckSidePoint()
+        {
+            var original = new DraftShiftSettings();
+            var marked = DraftShiftSettings.MarkedPreset();
+            CheckSupportPositions(original);
+            CheckSupportPositions(marked, replaySeed: 2);
+            Vector2[] approach = { new(-12, 60) };
+            float[] immediate = { 0f };
+            PlaytestPointCycle(original, "Original", approach, immediate, 64, upperPoint: true);
+            PlaytestPointCycle(marked, "Marked", approach, immediate, 64, upperPoint: true);
+        }
+
+        private static DraftShiftSettings LateCenterSettings()
+        {
+            // Move only C's start in a test copy to observe recovery when the first lane defender is late.
+            var settings = DraftShiftSettings.MarkedPreset();
+            settings.BlueCenter = new Vector2(380, 620);
+            return settings;
+        }
+
+        private static EditorApplication.CallbackFunction liveReplayTick;
+        private const float ReplayStep = 0.02f;
+
+        [MenuItem("Tools/Shift Happens/Watch Weak-Side Lane Cut")]
+        public static void WatchWeakSideLaneCut() =>
+            WatchPointLaneCut(LateCenterSettings(), 0, "Marked upper corner · late C", upperPoint: false);
+
+        [MenuItem("Tools/Shift Happens/Watch Puck-Side Cut/Original handoff")]
+        public static void WatchOriginalPuckSideCut() =>
+            WatchPointLaneCut(new DraftShiftSettings(), 0, "Original handoff · seed 0", upperPoint: true);
+
+        [MenuItem("Tools/Shift Happens/Watch Puck-Side Cut/Marked upper corner")]
+        public static void WatchMarkedPuckSideCut() =>
+            WatchPointLaneCut(DraftShiftSettings.MarkedPreset(), 2, "Marked upper corner · seed 2", upperPoint: true);
+
+        [MenuItem("Tools/Shift Happens/Watch Center Support/Original handoff")]
+        public static void WatchOriginalCenterSupport() =>
+            WatchCenterSupport(new DraftShiftSettings(), 1, "Original handoff · seed 1");
+
+        [MenuItem("Tools/Shift Happens/Watch Center Support/Marked upper corner")]
+        public static void WatchMarkedCenterSupport() =>
+            WatchCenterSupport(DraftShiftSettings.MarkedPreset(), 0, "Marked upper corner · seed 0");
+
+        private static void WatchCenterSupport(DraftShiftSettings settings, int seed, string setup)
+        {
+            float? containStart = null;
+            WatchReplay(settings, seed, setup, "C SUPPORT FINAL", "C",
+                "Watch teal C support from inside the puck-side circle", replay =>
+                {
+                    if (replay.Time == 0) containStart = null;
+                    if (replay.ContainmentAvailable) replay.SkateTo(replay.Carrier + new Vector2(-12, 60));
+                    replay.Step(ReplayStep);
+                    if (!replay.Containing) return null;
+                    containStart ??= replay.Time;
+                    if (replay.Time < containStart.Value + 0.7f) return null;
+                    float margin = CenterShoulderDepth(replay, settings.Map(new Vector2(105, 397)));
+                    Debug.Log($"LIVE_CENTER_SUPPORT seed={seed} time={replay.Time:0.00} C={replay.BlueCenter} insideMargin={margin:0.0}");
+                    return $"C supports inside the puck-side circle · {(margin > 0f ? "inside shoulder" : "outside shoulder")}";
+                },
+                replay => !replay.HandoffAt.HasValue ? "Before the handoff · RD is returning and LD holds the slot lane"
+                    : "After the handoff · RD covers net front and LD moves out to contain");
+        }
+
+        [MenuItem("Tools/Shift Happens/Watch LD Positioning/Original handoff")]
+        public static void WatchOriginalLdPositioning() =>
+            WatchLdPositioning(new DraftShiftSettings(), 1, "Original handoff · seed 1");
+
+        [MenuItem("Tools/Shift Happens/Watch LD Positioning/Marked upper corner")]
+        public static void WatchMarkedLdPositioning() =>
+            WatchLdPositioning(DraftShiftSettings.MarkedPreset(), 0, "Marked upper corner · seed 0");
+
+        private static void WatchLdPositioning(DraftShiftSettings settings, int seed, string setup)
+        {
+            float? containStart = null;
+            string hold = settings.HoldFromPassingLane
+                ? "LD holds the passing lane to net front"
+                : "LD holds net front";
+            WatchReplay(settings, seed, setup, "LD POSITIONING APPROVED", "LD",
+                "Follow the ring under Blue LD", replay =>
+                {
+                    if (replay.Time == 0) containStart = null;
+                    if (replay.ContainmentAvailable) replay.SkateTo(replay.Carrier + new Vector2(-12, 60));
+                    replay.Step(ReplayStep);
+                    if (!replay.Containing)
+                    {
+                        containStart = null;
+                        return null;
+                    }
+                    containStart ??= replay.Time;
+                    if (replay.Time < containStart.Value + 0.7f) return null;
+                    LogLdPosition("contain", setup, replay);
+                    return "LD contains from inside while RD covers net front";
+                },
+                replay => replay.HandoffAt.HasValue ? "RD has net front · LD closes from inside" : hold + " while RD returns",
+                checkpoint: replay =>
+                {
+                    if (!replay.ContainmentAvailable || replay.HandoffAt != replay.Time) return null;
+                    LogLdPosition("handoff", setup, replay);
+                    return hold + " until RD takes coverage";
+                });
+        }
+
+        private static void LogLdPosition(string read, string setup, PracticeShift replay) =>
+            Debug.Log(FormattableString.Invariant(
+                $"LIVE_LD_POSITION {read} {setup} time={replay.Time:0.00} LD={replay.Player} RD={replay.Partner} carrier={replay.Carrier} slotCovered={replay.SlotLaneCovered} rdCovering={replay.PartnerHasCoverage} containing={replay.Containing}"));
+
+        [MenuItem("Tools/Shift Happens/Watch RD Return/Original handoff")]
+        public static void WatchOriginalRdReturn() =>
+            WatchRdReturn(new DraftShiftSettings(), 1, "Original handoff · seed 1");
+
+        [MenuItem("Tools/Shift Happens/Watch RD Return/Marked upper corner")]
+        public static void WatchMarkedRdReturn() =>
+            WatchRdReturn(DraftShiftSettings.MarkedPreset(), 0, "Marked upper corner · seed 0");
+
+        private static void WatchRdReturn(DraftShiftSettings settings, int seed, string setup)
+        {
+            float? insideAt = null;
+            float? insideAndInReachAt = null;
+            Vector2 net = settings.Map(new Vector2(105, 397));
+            void Observe(PracticeShift replay)
+            {
+                Vector2 threat = replay.NetFrontAttacker;
+                if (Vector2.Dot(replay.Partner - threat, net - threat) <= 0f) return;
+                insideAt ??= replay.Time;
+                if (Vector2.Distance(replay.Partner, threat) <= settings.CoverageReach)
+                    insideAndInReachAt ??= replay.Time;
+            }
+            WatchReplay(settings, seed, setup, "RD RETURN FINAL", "RD",
+                "Follow teal RD returning to the net-front threat", replay =>
+                {
+                    if (replay.Time == 0)
+                    {
+                        insideAt = null;
+                        insideAndInReachAt = null;
+                        Observe(replay);
+                    }
+                    replay.Step(ReplayStep);
+                    Observe(replay);
+                    if (!replay.PartnerHasCoverage) return null;
+                    Debug.Log(FormattableString.Invariant(
+                        $"LIVE_RD_RETURN {setup} inside={insideAt:0.00} insideAndInReach={insideAndInReachAt:0.00} coverage={replay.Time:0.00} RD={replay.Partner} threat={replay.NetFrontAttacker}"));
+                    return $"RD establishes coverage on Red {settings.NetFrontLabel} at {replay.Time:0.00}s · LD may contain";
+                },
+                _ => insideAndInReachAt.HasValue
+                    ? $"RD reached the inside shoulder within coverage reach at {insideAndInReachAt:0.00}s"
+                    : "LD holds the slot lane while RD returns");
+        }
+
+        private static void WatchPointLaneCut(DraftShiftSettings settings, int seed, string setup, bool upperPoint)
+        {
+            string wing = upperPoint ? "LW" : "RW";
+            string title = upperPoint ? "LW PUCK SIDE FINAL" : "RW WEAK SIDE FINAL";
+            WatchReplay(settings, seed, setup, title, wing, $"Watch teal {wing} cut the lane on Red's release", replay =>
+            {
+                if (replay.ContainmentAvailable) replay.SkateTo(replay.Carrier + new Vector2(-12, 60));
+                var before = replay.Stage;
+                Vector2 puckBefore = replay.Puck;
+                replay.Step(ReplayStep);
+                if (before != PracticeShift.Phase.Pass || replay.Stage == before) return null;
+
+                Vector2 defender = upperPoint ? replay.BlueLeftWing : replay.BlueRightWing;
+                Vector2 receiver = upperPoint ? replay.RedRightDefense : replay.RedLeftDefense;
+                bool inside = Vector2.Dot(defender - receiver, settings.Map(new Vector2(105, 397)) - receiver) > 0;
+                bool wingBrokeItUp = PassDeflector(replay, puckBefore) == "Blue_" + wing;
+                Debug.Log($"LIVE_LANE_CUT wing={wing} seed={seed} time={replay.Time:0.00} breakup={wingBrokeItUp} inside={inside}");
+                return wingBrokeItUp
+                    ? $"{wing} breaks up the pass · {(inside ? "inside shoulder" : "outside shoulder")}"
+                    : replay.Message;
+            });
+        }
+
+        [MenuItem("Tools/Shift Happens/Watch Crowded Handoff")]
+        private static void WatchCrowdedHandoff() => WatchCrowdedHandoff(false);
+
+        [MenuItem("Tools/Shift Happens/Watch Mirrored Crowded Handoff")]
+        private static void WatchMirroredCrowdedHandoff() => WatchCrowdedHandoff(true);
+
+        private static void WatchCrowdedHandoff(bool mirrored)
+        {
+            var settings = new DraftShiftSettings
+            {
+                Mirror = mirrored,
+                PartnerStart = new Vector2(145, 459),
+                BlueCenter = new Vector2(184, 381),
+            };
+            string setup = mirrored ? "Mirrored crowd · seed 1" : "Crowded handoff · seed 1";
+            WatchReplay(settings, 1, setup, "CROWDED NET FRONT", "LD",
+                "Watch LD hold the slot as RD returns from below the net.", replay =>
+                {
+                    replay.Step(ReplayStep);
+                    if (replay.TeachingPaused)
+                        LogCrowd("hold", mirrored, replay);
+                    if (!replay.ContainmentAvailable) return null;
+                    LogCrowd("handoff", mirrored, replay);
+                    return "RD covers net front  |  LD may contain from inside";
+                }, guided: true);
+        }
+
+        private static void LogCrowd(string read, bool mirrored, PracticeShift replay) =>
+            Debug.Log($"LIVE_CROWDED_HANDOFF {read} mirrored={mirrored} seed={replay.Seed} time={replay.Time:0.00} " +
+                $"LD={replay.Player} RD={replay.Partner} BlueC={replay.BlueCenter} RedC={replay.NetFrontAttacker} " +
+                $"slotCovered={replay.SlotLaneCovered} containAvailable={replay.ContainmentAvailable}");
+
+        private static void WatchReplay(DraftShiftSettings settings, int seed, string setup, string title, string focus,
+            string prompt, Func<PracticeShift, string> advance, Func<PracticeShift, string> caption = null,
+            bool guided = false, Func<PracticeShift, string> checkpoint = null)
+        {
+            var board = UnityEngine.Object.FindAnyObjectByType<RinkPractice>();
+            if (!EditorApplication.isPlaying || board == null)
+            {
+                Debug.LogWarning("Open Defensive Practice and enter Play Mode to watch the replay.");
+                return;
+            }
+
+            PracticeShift replay = null;
+            double beginsAt = 0;
+            double lastTick = 0;
+            double pending = 0;
+            double? resumeTeachingAt = null;
+            double resumeCheckpointAt = 0;
+            EditorApplication.update -= liveReplayTick;
+
+            void Restart()
+            {
+                replay = new PracticeShift(seed, settings, guided);
+                beginsAt = EditorApplication.timeSinceStartup + 4;
+                lastTick = beginsAt;
+                pending = 0;
+                resumeTeachingAt = null;
+                resumeCheckpointAt = 0;
+                if (!board.ShowEditorReplay(replay, setup, focus, Restart))
+                {
+                    Debug.LogWarning("Close Review Mode before starting the live replay.");
+                    return;
+                }
+                board.DrawEditorReplay(title, "Replay starts in 4…", prompt);
+                EditorApplication.update -= liveReplayTick;
+                EditorApplication.update += liveReplayTick;
+            }
+
+            void Tick()
+            {
+                if (!EditorApplication.isPlaying || board == null)
+                {
+                    EditorApplication.update -= liveReplayTick;
+                    return;
+                }
+                double now = EditorApplication.timeSinceStartup;
+                if (now < beginsAt)
+                {
+                    board.DrawEditorReplay(title, $"Replay starts in {Math.Ceiling(beginsAt - now):0}…", prompt);
+                    return;
+                }
+                if (now < resumeCheckpointAt)
+                {
+                    lastTick = now;
+                    return;
+                }
+                if (replay.Stage == PracticeShift.Phase.Ready) replay.TogglePlay();
+                if (replay.TeachingPaused)
+                {
+                    resumeTeachingAt ??= now + 4;
+                    lastTick = now;
+                    pending = 0;
+                    if (now < resumeTeachingAt.Value)
+                    {
+                        board.DrawEditorReplay(title, replay.Message, "Teaching pause · replay resumes automatically");
+                        return;
+                    }
+                    replay.TogglePlay();
+                }
+                pending += Math.Min(now - lastTick, 0.1) * 0.7;
+                lastTick = now;
+                while (pending >= ReplayStep && replay.CanSkate)
+                {
+                    string result = advance(replay);
+                    pending -= ReplayStep;
+                    if (result != null)
+                    {
+                        board.DrawEditorReplay(title, "Replay paused. Select Replay to watch again.", result);
+                        EditorApplication.update -= liveReplayTick;
+                        return;
+                    }
+                    string checkpointCaption = checkpoint?.Invoke(replay);
+                    if (checkpointCaption != null)
+                    {
+                        resumeCheckpointAt = now + 4;
+                        pending = 0;
+                        board.DrawEditorReplay(title, checkpointCaption, "Handoff pause · replay resumes automatically");
+                        return;
+                    }
+                }
+                board.DrawEditorReplay(title, caption?.Invoke(replay) ?? replay.Message, prompt);
+                if (replay.Stage == PracticeShift.Phase.Finished) EditorApplication.update -= liveReplayTick;
+            }
+
+            liveReplayTick = Tick;
+            Restart();
+        }
+
+        private static void AdvanceToCycle(PracticeShift shift, Vector2 approach, float delay)
+        {
+            while (shift.Stage == PracticeShift.Phase.Carry && shift.Time < 14f)
+            {
+                if (shift.ContainmentAvailable && shift.Time >= shift.HandoffAt.GetValueOrDefault() + delay)
+                    shift.SkateTo(shift.Carrier + approach);
+                shift.Step(0.02f);
+            }
+        }
+
+        private static void CheckPointLaneCut(DraftShiftSettings settings, bool upperPoint)
+        {
+            var shift = Start(0, settings);
+            string receiver = upperPoint ? "RD" : "LD";
+            string defender = upperPoint ? "Blue_LW" : "Blue_RW";
+            AdvanceToCycle(shift, new Vector2(-12, 60), 0f);
+            Require(shift.Stage == PracticeShift.Phase.Pass && !shift.SlotFeed && shift.PassReceiver == receiver,
+                $"The seed-0 comparison must release to Red {receiver} at the point.");
+            Vector2 Wing() => upperPoint ? shift.BlueLeftWing : shift.BlueRightWing;
+            Vector2 wingAtRelease = Wing();
+            Vector2 previousPuck = shift.Puck;
+            shift.Step(0.02f);
+            Require(Vector2.Distance(Wing(), wingAtRelease) > 0.001f, $"{defender} should move on release.");
+            if (!upperPoint)
+                Require(Wing().y < wingAtRelease.y, "RW should start cutting toward the weak-side lane on release.");
+            while (shift.Stage == PracticeShift.Phase.Pass)
+            {
+                previousPuck = shift.Puck;
+                shift.Step(0.02f);
+                Vector2 opponent = upperPoint ? shift.RedRightDefense : shift.RedLeftDefense;
+                Require(Vector2.Dot(Wing() - opponent, new Vector2(105, 397) - opponent) > 0,
+                    $"{defender} must stay on the net side of Red {receiver} while cutting the lane.");
+            }
+            Require(PassDeflector(shift, previousPuck) == defender,
+                $"{defender} should break up the seed-0 point pass before it reaches Red {receiver}.");
+        }
+
+        private static void PlaytestPointCycle(DraftShiftSettings settings, string preset,
+            Vector2[] approaches, float[] delays, int seedCount, bool upperPoint = false)
+        {
+            const float step = 0.02f;
+            string logTag = upperPoint ? "PUCK_SIDE_CYCLE" : "WEAK_CYCLE";
+            string receiver = upperPoint ? "RD" : "LD";
+            string wingLabel = upperPoint ? "lw" : "rw";
+            var counts = new Dictionary<string, int>();
+            var examples = new Dictionary<string, string>();
+            float smallestShoulderDepth = float.PositiveInfinity;
+            float latestRecoveryStart = 0f;
+            foreach (Vector2 approach in approaches)
+            foreach (float delay in delays)
+            for (int seed = 0; seed < seedCount; seed++)
+            {
+                var shift = Start(seed, settings);
+                AdvanceToCycle(shift, approach, delay);
+                if (shift.Stage != PracticeShift.Phase.Pass || shift.SlotFeed || shift.PassReceiver != receiver ||
+                    shift.ContainRead != PracticeShift.ReadResult.Met || shift.Puck.y >= 397f)
+                    continue;
+
+                Vector2 net = settings.Map(new Vector2(105, 397));
+                Vector2 Wing() => upperPoint ? shift.BlueLeftWing : shift.BlueRightWing;
+                Vector2 PointSkater() => upperPoint ? shift.RedRightDefense : shift.RedLeftDefense;
+                float ShoulderDepth() => Vector2.Dot(Wing() - PointSkater(), (net - PointSkater()).normalized);
+                string Point(Vector2 point) => FormattableString.Invariant($"{point.x:0.0},{point.y:0.0}");
+                string Snapshot() => $"{wingLabel}={Point(Wing())} point={Point(PointSkater())} puck={Point(shift.Puck)}";
+
+                float released = shift.Time;
+                Vector2 wingAtRelease = Wing();
+                string releaseFrame = Snapshot();
+                float minShoulderDepth = ShoulderDepth();
+                float minPuckDistance = Vector2.Distance(Wing(), shift.Puck);
+                float? recoveryStart = null;
+                string outcome = null;
+                while (shift.Stage == PracticeShift.Phase.Pass)
+                {
+                    Vector2 previous = shift.Puck;
+                    shift.Step(step);
+                    if (!recoveryStart.HasValue && Vector2.Distance(Wing(), wingAtRelease) > 0.001f)
+                        recoveryStart = shift.Time - released;
+                    minShoulderDepth = Mathf.Min(minShoulderDepth, ShoulderDepth());
+                    minPuckDistance = Mathf.Min(minPuckDistance, LaneDistance(Wing(), previous, shift.Puck));
+                    outcome = PassDeflector(shift, previous);
+                }
+                smallestShoulderDepth = Mathf.Min(smallestShoulderDepth, minShoulderDepth);
+                latestRecoveryStart = Mathf.Max(latestRecoveryStart, recoveryStart ?? float.PositiveInfinity);
+                outcome ??= shift.Stage == PracticeShift.Phase.Shot ? "Red_shot" : "Loose_at_point";
+                counts.TryGetValue(outcome, out int count);
+                counts[outcome] = count + 1;
+                string endFrame = Snapshot();
+                float elapsed = shift.Time - released;
+                float endGap = Vector2.Distance(Wing(), PointSkater());
+                AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 30f);
+                examples.TryAdd(outcome, FormattableString.Invariant(
+                    $"{logTag} {preset} seed={seed} approach={Point(approach)} delay={delay:0.0} outcome={outcome} release={released:0.00} recover={recoveryStart:0.00} flight={elapsed:0.00} insideMin={minShoulderDepth:0.0} puckGap={minPuckDistance:0.0} receiverGap={endGap:0.0} finish={shift.PuckPossession} start {releaseFrame} end {endFrame}"));
+            }
+            Debug.Log(FormattableString.Invariant(
+                $"{logTag} {preset} runs={seedCount * approaches.Length * delays.Length} insideMin={smallestShoulderDepth:0.0} latestRecovery={latestRecoveryStart:0.00} {string.Join(", ", counts)}"));
+            foreach (string example in examples.Values) Debug.Log(example);
+        }
+
+        private static string PassDeflector(PracticeShift shift, Vector2 previous)
+        {
+            if (shift.Stage != PracticeShift.Phase.LoosePuck || !shift.Message.StartsWith("Blue's stick")) return null;
+            return LaneDistance(shift.Player, previous, shift.Puck) < 18f ? "Blue_LD"
+                : LaneDistance(shift.Partner, previous, shift.Puck) < 18f ? "Blue_RD"
+                : LaneDistance(shift.BlueCenter, previous, shift.Puck) < 16f ? "Blue_C"
+                : LaneDistance(shift.BlueLeftWing, previous, shift.Puck) < 16f ? "Blue_LW"
+                : "Blue_RW";
+        }
+
+        private static float LaneDistance(Vector2 point, Vector2 start, Vector2 end)
+        {
+            Vector2 lane = end - start;
+            float along = lane.sqrMagnitude > 0f ? Mathf.Clamp01(Vector2.Dot(point - start, lane) / lane.sqrMagnitude) : 0f;
+            return Vector2.Distance(point, start + along * lane);
+        }
+
         private static void CheckHandoff(bool mirrored)
         {
             var settings = new DraftShiftSettings { Mirror = mirrored };
@@ -68,7 +535,7 @@ namespace ShiftHappens.Editor
             Require(!shift.SlotFeed, "A covered slot should redirect a slot look to the point.");
             Require(shift.Time < 14f && shift.Message.StartsWith("LD closes"), "Containment must pressure Red into an earlier point cycle.");
             AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 30f);
-            Debug.Log($"Handoff verified. Mirror={mirrored}, handoff={shift.HandoffAt:0.00}s, {shift.DraftReview}.");
+            Debug.Log($"Original hold and contain: mirror={mirrored}, handoff={shift.HandoffAt:0.00}s, Red {shift.PassReceiver}, {shift.Time:0.00}s, {shift.PuckPossession}, {shift.Message} {shift.ScoreSummary}");
         }
 
         private static void CheckEarlyDeparture()
@@ -79,13 +546,23 @@ namespace ShiftHappens.Editor
             Require(shift.SlotFeed && shift.Destination == shift.NetFrontAttacker, "Leaving early must expose a live slot feed, even on the point seed.");
             Require(!shift.HandoffAt.HasValue && shift.HoldRead == PracticeShift.ReadResult.Missed, "An early departure should miss the hold read.");
             Require(shift.ContainRead == PracticeShift.ReadResult.Unobserved, "A pass before the handoff must leave containment unobserved.");
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 30f);
+            Debug.Log($"Original early departure: Red {shift.PassReceiver}, {shift.Time:0.00}s, {shift.PuckPossession}, {shift.Message} {shift.ScoreSummary}");
         }
 
         private static void CheckWrongSide()
         {
-            var shift = Start(0, new DraftShiftSettings { PartnerCoverageOffset = new Vector2(25, 20) });
-            AdvanceUntil(shift, () => shift.Time >= 9f, 10f);
+            var settings = new DraftShiftSettings { Mirror = true, PartnerCoverageOffset = new Vector2(25, 20) };
+            var shift = Start(0, settings);
+            AdvanceUntil(shift, () => shift.Time >= 5.9f, 7f);
+            Require(shift.PartnerArrivedWrongSide, "The wrong-side cue should be available once RD arrives.");
+            Require(shift.PositioningSummary.Contains("RD (final) outside"), "The positioning review must flag RD on the outside shoulder.");
             Require(!shift.PartnerHasCoverage && !shift.HandoffAt.HasValue, "Arrival on the wrong side must never establish the handoff.");
+            shift.SkateTo(settings.Map(new Vector2(170, 160)));
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Pass, 12f);
+            Require(shift.SlotFeed && shift.Destination == shift.NetFrontAttacker, "A late departure before coverage must expose the slot feed.");
+            Require(shift.HoldRead == PracticeShift.ReadResult.Missed && shift.ContainRead == PracticeShift.ReadResult.Unobserved,
+                "Earlier hold time must not erase an exposed slot before coverage.");
         }
 
         private static void CheckPauseAndRetry()
@@ -137,6 +614,180 @@ namespace ShiftHappens.Editor
             Require(shift.Time >= 14f, "Without containment the carrier should have time to settle the play.");
         }
 
+        private static void CheckMarkedStartingPositions()
+        {
+            var settings = DraftShiftSettings.MarkedPreset();
+            var early = new PracticeShift(0, settings);
+            Require(early.Carrier == settings.CarrierStart && early.Puck == settings.PuckStart &&
+                early.NetFrontAttacker == settings.NetFrontStart && early.Player == settings.PlayerStart &&
+                early.Partner == settings.PartnerStart, "The marked scene must load the marked starting positions.");
+            early.TogglePlay();
+            AdvanceUntil(early, () => early.TeachingPaused, 2f);
+            early.TogglePlay();
+            early.SkateTo(new Vector2(245, 306));
+            AdvanceUntil(early, () => early.Stage == PracticeShift.Phase.Warning, 10f);
+            Require(early.SlotFeed && !early.SlotLaneCovered && !early.HandoffAt.HasValue,
+                "Leaving the marked lane early should expose the feed to LW before RD is set.");
+            AdvanceUntil(early, () => early.Stage == PracticeShift.Phase.Pass, 10f);
+            Require(early.SlotFeed == !early.SlotLaneCovered && early.HoldRead == PracticeShift.ReadResult.Missed,
+                "Red should release to LW if the lane is still open, and RD's recovery must not erase the early miss.");
+            AdvanceUntil(early, () => early.Stage == PracticeShift.Phase.Finished, 30f);
+            Debug.Log($"Marked early departure: Red {early.PassReceiver}, {early.Time:0.00}s, {early.PuckPossession}, {early.Message} {early.ScoreSummary}");
+
+            var held = Start(0, settings);
+            AdvanceUntil(held, () => held.ContainmentAvailable, 10f);
+            Require(held.HoldRead == PracticeShift.ReadResult.Met, "LD should hold the marked passing lane until RD is set.");
+            Require(!held.Containing, "The marked hold position must leave LD a separate containment decision.");
+            AdvanceUntil(held, () => held.Stage == PracticeShift.Phase.Pass, 14f, () =>
+                held.SkateTo(held.Carrier + new Vector2(-12, 60)));
+            Require(!held.SlotFeed && (held.Destination == held.RedLeftDefense || held.Destination == held.RedRightDefense) &&
+                held.ContainRead == PracticeShift.ReadResult.Met, "Containment from inside should send Red C to the marked point.");
+            AdvanceUntil(held, () => held.Stage == PracticeShift.Phase.Finished, 30f);
+            Debug.Log($"Marked hold and contain: Red {held.PassReceiver}, {held.Time:0.00}s, {held.PuckPossession}, {held.Message} {held.ScoreSummary}");
+        }
+
+        private static void CheckInterruptedContainment(DraftShiftSettings settings)
+        {
+            var shift = Start(0, settings);
+            AdvanceUntil(shift, () => shift.ContainmentAvailable, 10f);
+            float total = 0;
+            float longest = 0;
+            void Steer(float range) => shift.SkateTo(shift.Carrier + new Vector2(-12, range));
+
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                AdvanceUntil(shift, () => shift.Containing, 11f, () => Steer(settings.ContainDistance - 5f));
+                float began = shift.Time;
+                AdvanceUntil(shift, () => shift.Time - began >= 0.56f, 12f,
+                    () => Steer(settings.ContainDistance - 5f));
+                Require(shift.Containing, "The test must hold position through each short attempt.");
+                AdvanceUntil(shift, () => !shift.Containing, 13f, () => Steer(settings.ContainDistance + 25f));
+                float duration = shift.Time - began;
+                total += duration;
+                longest = Mathf.Max(longest, duration);
+                Require(shift.ContainmentAvailable && shift.Stage == PracticeShift.Phase.Carry,
+                    "A short attempt must end through LD's movement while RD still covers and Red still carries.");
+            }
+
+            Require(total >= 1f && longest < 1f, $"Expected two short attempts totaling at least one second, got {total:0.00}s total and {longest:0.00}s longest.");
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Pass, 16f,
+                () => Steer(settings.ContainDistance + 25f));
+            Require(shift.HoldRead == PracticeShift.ReadResult.Met && shift.ContainRead == PracticeShift.ReadResult.Missed &&
+                shift.Time >= 14f, "Broken attempts must score Missed and leave Red time to carry.");
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 30f);
+            Debug.Log($"Interrupted containment: corner={settings.CornerCarry}, {total:0.00}s total, {longest:0.00}s longest, Red {shift.PassReceiver}, {shift.Time:0.00}s, {shift.PuckPossession}. {shift.ScoreSummary}");
+        }
+
+        private static void CheckSupportPositions(DraftShiftSettings settings, int? replaySeed = null)
+        {
+            var shift = Start(replaySeed ?? (settings.CornerCarry ? 0 : 1), settings);
+            string preset = settings.CornerCarry ? "Marked" : "Original";
+            string Snapshot(string frame)
+            {
+                string Point(Vector2 p) => FormattableString.Invariant($"{p.x:0.0},{p.y:0.0}");
+                return FormattableString.Invariant(
+                    $"BOX_POSITION {preset} {frame} seed={shift.Seed} time={shift.Time:0.00} C={Point(shift.BlueCenter)} LW={Point(shift.BlueLeftWing)} RW={Point(shift.BlueRightWing)} LD={Point(shift.Player)} RD={Point(shift.Partner)} Carrier={Point(shift.Carrier)} Threat={Point(shift.NetFrontAttacker)} Point={Point(shift.RedRightDefense)} FarPoint={Point(shift.RedLeftDefense)} Puck={Point(shift.Puck)} Support={Point(shift.RedSupport)}");
+            }
+
+            string before = null;
+            string shouldersBefore = null;
+            Vector2 centerBefore = shift.BlueCenter;
+            Vector2 weakWingBefore = shift.BlueRightWing;
+            Vector2 net = settings.Map(new Vector2(105, 397));
+            float shoulderBefore = 0f;
+            AdvanceUntil(shift, () => shift.ContainmentAvailable, 10f, () =>
+            {
+                before = Snapshot("before");
+                shouldersBefore = shift.PositioningSummary;
+                centerBefore = shift.BlueCenter;
+                weakWingBefore = shift.BlueRightWing;
+                shoulderBefore = CenterShoulderDepth(shift, net);
+            });
+            Require(shift.PartnerHasCoverage && !shift.Containing, "RD must cover before LD closes.");
+
+            float minimumShoulder = shoulderBefore;
+            void CloseFromInside()
+            {
+                minimumShoulder = Mathf.Min(minimumShoulder, CenterShoulderDepth(shift, net));
+                shift.SkateTo(shift.Carrier + new Vector2(-12, 60));
+            }
+            AdvanceUntil(shift, () => shift.Containing, 10f, CloseFromInside);
+            float containStart = shift.Time;
+            AdvanceUntil(shift, () => shift.Time >= containStart + 0.7f, 12f, CloseFromInside);
+            Vector2 circleDot = new(242, 245);
+            Require(shift.Containing && shift.PartnerHasCoverage && shift.Stage == PracticeShift.Phase.Carry,
+                "Capture support with LD containing, RD covering and Red still carrying.");
+            Require(Vector2.Distance(shift.BlueCenter, circleDot) <= 75f &&
+                Vector2.Distance(shift.BlueCenter, circleDot) + 15f < Vector2.Distance(centerBefore, circleDot),
+                $"Blue C should move inside the puck-side circle. {before} {Snapshot("after")}");
+            string shouldersAfter = shift.PositioningSummary;
+            Require(shouldersBefore.Contains("LW inside   RW inside") &&
+                shouldersAfter.Contains("LD (draft) inside   RD (final) inside   C inside   LW inside   RW inside"),
+                $"Expected both wings inside before the handoff and all five skaters inside during contain. {shouldersBefore} / {shouldersAfter}");
+            Require(weakWingBefore.y is >= 397f and <= 451f && shift.BlueRightWing.y is >= 397f and <= 451f,
+                $"The weak-side wing should tuck toward the high-slot center. {before} {Snapshot("after")}");
+            Debug.Log(before);
+            Debug.Log(Snapshot("after"));
+            Debug.Log($"BOX_SHOULDERS {preset} before={shouldersBefore} / after={shouldersAfter}");
+            float shoulderAfter = CenterShoulderDepth(shift, net);
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Pass, 14f, CloseFromInside);
+            Debug.Log(FormattableString.Invariant(
+                $"CENTER_SUPPORT {preset} seed={shift.Seed} before={shoulderBefore:0.0} after={shoulderAfter:0.0} minimum={minimumShoulder:0.0} release={shift.Time:0.00}"));
+            Require(shift.HoldRead == PracticeShift.ReadResult.Met && shift.ContainRead == PracticeShift.ReadResult.Met,
+                "The center rotation must preserve a valid Hold and Contain.");
+        }
+
+        private static float CenterShoulderDepth(PracticeShift shift, Vector2 net) =>
+            Vector2.Dot(shift.BlueCenter - shift.RedSupport, (net - shift.RedSupport).normalized);
+
+        private static void CheckResponsiveSkating(DraftShiftSettings settings)
+        {
+            var shift = Start(0, settings);
+            var retry = Start(0, settings);
+            var differentSeed = Start(4, settings);
+            var differentDefense = Start(0, settings);
+            var mirrorSettings = settings.Copy();
+            mirrorSettings.Mirror = true;
+            var mirror = Start(0, mirrorSettings);
+            differentDefense.SkateTo(settings.CornerCarry ? new Vector2(220, 326) : new Vector2(245, 338));
+            float upperPointTravel = 0;
+            float lowerPointTravel = 0;
+            float redResponse = 0;
+            float blueResponse = 0;
+            float seedVariation = 0;
+            for (int i = 0; i < 125; i++)
+            {
+                shift.Step(0.02f);
+                retry.Step(0.02f);
+                differentSeed.Step(0.02f);
+                differentDefense.Step(0.02f);
+                mirror.Step(0.02f);
+                upperPointTravel = Mathf.Max(upperPointTravel, Vector2.Distance(shift.RedRightDefense, settings.RedRightDefense));
+                lowerPointTravel = Mathf.Max(lowerPointTravel, Vector2.Distance(shift.RedLeftDefense, settings.RedLeftDefense));
+                redResponse = Mathf.Max(redResponse, Vector2.Distance(shift.RedSupport, differentDefense.RedSupport));
+                blueResponse = Mathf.Max(blueResponse, Vector2.Distance(shift.BlueCenter, differentDefense.BlueCenter));
+                seedVariation = Mathf.Max(seedVariation, Vector2.Distance(shift.RedSupport, differentSeed.RedSupport));
+            }
+            Require(Vector2.Distance(shift.BlueCenter, settings.BlueCenter) > 15f &&
+                Vector2.Distance(shift.BlueLeftWing, settings.BlueLeftWing) > 15f &&
+                Vector2.Distance(shift.BlueRightWing, settings.BlueRightWing) > 8f, "The supporting Blue skaters must rotate.");
+            Require(Vector2.Distance(shift.RedSupport, settings.RedSupport) > 15f &&
+                lowerPointTravel > 10f && upperPointTravel > 10f,
+                $"Red must move to create outlets. Support {Vector2.Distance(shift.RedSupport, settings.RedSupport):0.0}, points {lowerPointTravel:0.0}/{upperPointTravel:0.0}.");
+            Require(redResponse > 5f && blueResponse > 5f,
+                $"Changing LD's position should move a Red outlet and Blue's low support. Red {redResponse:0.0}, Blue {blueResponse:0.0}.");
+            Require(shift.RedSupport == retry.RedSupport && shift.BlueCenter == retry.BlueCenter &&
+                shift.Puck == retry.Puck, "Same-seed retries must reproduce skating and puck state.");
+            Require(seedVariation > 8f, $"New seeds should vary the attacking route. Support changed by {seedVariation:0.0}.");
+            Require(Vector2.Distance(shift.RedSupport, mirrorSettings.Map(mirror.RedSupport)) < 0.01f &&
+                Vector2.Distance(shift.BlueCenter, mirrorSettings.Map(mirror.BlueCenter)) < 0.01f,
+                "Responsive movement must reflect correctly on the mirrored rink.");
+            shift.TogglePlay();
+            Vector2 before = shift.RedSupport;
+            shift.Step(0.25f);
+            Require(shift.RedSupport == before, "Team skating must stop when the shift is paused.");
+        }
+
         private static PracticeShift Start(int seed, DraftShiftSettings settings)
         {
             var shift = new PracticeShift(seed, settings, guided: false);
@@ -151,7 +802,7 @@ namespace ShiftHappens.Editor
                 steer?.Invoke();
                 shift.Step(0.02f);
             }
-            Require(condition(), $"Condition never reached at {shift.Time:0.00}s in {shift.Stage}. {shift.DraftReview}. {shift.Message}");
+            Require(condition(), $"Condition never reached at {shift.Time:0.00}s in {shift.Stage}. {shift.ScoreSummary}. {shift.Message}");
         }
 
         private static void Require(bool condition, string message)
