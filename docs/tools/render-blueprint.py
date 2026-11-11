@@ -7,7 +7,7 @@ from reportlab.lib.styles import ParagraphStyle
 import pypdfium2 as pdfium
 from pypdf import PdfReader
 
-out = Path('C:/Users/degra/Documents/Shift Happens/docs')
+out = Path(__file__).resolve().parents[1]
 out.mkdir(exist_ok=True)
 pdf = out / 'first-defensive-shift-draft.pdf'
 c = canvas.Canvas(str(pdf), pagesize=(612, 792))
@@ -131,7 +131,7 @@ text(30,172,'REPEATABLE TESTS FOR BOTH DECISIONS',10,True)
 para(30,161,552,'<b>Paired runs</b> Replay the same seeded setup with (1) Y holding versus leaving before RD takes over and (2) timely containment versus a late close or an inside-lane overcommit. Repeat with RD delayed, wrong-side or drawn away, plus a contested puck. Mirror the rink and vary carrier speed and receiver cuts.<br/><b>Measure</b> uncovered-lane time, goal-side responsibility, feasible stick reach, close timing, carrier options and recovery. Record positions, facing, ownership, pass paths and results. Judge the observed action separately from a goal or save. Mark a read unobserved when turnover or whistle removes its opportunity.',8.7,11.5)
 para(30,86,552,'<b>Playback checks</b> Guided uses one pre-handoff pause and a brief live cue. Freer uses the same simulation without automatic pauses. Pass, intercept, loose puck, shot, pause/resume, restart and replay must match recorded state. Feedback must match the observed cue, action and consequence. Attacking intent may be scripted. Lanes and outcomes must respond to play. Verify desktop standalone and phone separately.',8.1,10.5)
 para(30,40,552,'<b>Review basis</b> Local Box + 1 notes and supplied rink. Video linked in those notes was unavailable for re-review. Existing behind-net exchange assigns RD containment and Y net front. This proposed same-side variation needs David\'s approval of roles, handoff geometry, thresholds and feedback. Incorporate Brian\'s feedback when available.',7.3,9)
-c.linkURL('file:///C:/Users/degra/OneDrive/Documents/ChatGPT/Youth%20Hockey%20Coach/Shift%20Happens!/BOX-PLUS-ONE-MODEL.md',(86,30,160,40),relative=0)
+c.linkURL((out.parent / 'reference/browser/BOX-PLUS-ONE-MODEL.md').as_uri(),(86,30,160,40),relative=0)
 c.save()
 reader=PdfReader(str(pdf))
 assert len(reader.pages)==1
