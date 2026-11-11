@@ -19,3 +19,11 @@ The Unity Editor verification entry point is `ShiftHappens.Editor.PracticeValida
 7. Hold through the entire shift and verify the containment read is missed.
 
 All seven checks passed in Unity. The consolidated browser reference passed its 37 existing tests and production compilation. These checks establish behavior for the tested scenarios. David's coaching review and physical phone testing remain pending.
+
+## Local play and build status
+
+Handoff revision `5f2d946` built successfully for Windows. The executable is at `artifacts/windows/Shift Happens.exe`. Windows Application Control refused to launch it on this PC, so standalone runtime behavior is unverified.
+
+In Play Mode, the isolated copy at `artifacts/handoff-check` opened the `DefensivePractice` scene. The game displayed the draft label, RD at the bottom corner, RD skating toward net front, and the Guided pause at 0.8 seconds after Start. The rest of the interactive playthrough was interrupted by a shared desktop automation conflict. The Unity simulation checks exercised resume, handoff, containment, repeatability and outcomes through the end of the shift.
+
+Separate review-mode edits appeared in the shared workspace during verification. Those edits are outside the handoff commit. The isolated copy uses the handoff revision for review while the main `unity` folder remains the active source project.
