@@ -200,6 +200,37 @@ namespace ShiftHappens.Editor
         private static EditorApplication.CallbackFunction liveReplayTick;
         private const float ReplayStep = 0.02f;
 
+        [MenuItem("Tools/Shift Happens/Watch First Guided Shift/Hold then close")]
+        private static void WatchFirstGuidedHold() => WatchFirstGuidedShift(leaveEarly: false);
+
+        [MenuItem("Tools/Shift Happens/Watch First Guided Shift/Leave early")]
+        private static void WatchFirstGuidedEarly() => WatchFirstGuidedShift(leaveEarly: true);
+
+        private static void WatchFirstGuidedShift(bool leaveEarly)
+        {
+            WatchReplay(new DraftShiftSettings(), 1, "Original handoff", "FIRST GUIDED SHIFT", "LD", "",
+                replay =>
+                {
+                    if (replay.Stage == PracticeShift.Phase.Carry)
+                    {
+                        if (leaveEarly && replay.Time >= 0.8f)
+                            replay.SkateTo(new Vector2(180, 200));
+                        else if (!leaveEarly && replay.ContainmentAvailable)
+                            replay.SkateTo(replay.Carrier + new Vector2(-12, 60));
+                    }
+                    replay.Step(ReplayStep);
+                    if (replay.Stage != PracticeShift.Phase.Finished) return null;
+                    Debug.Log($"FIRST_GUIDED_REPLAY leaveEarly={leaveEarly} handoff={replay.HandoffAt:0.00} " +
+                        $"openedSlot={replay.OpenedSlotBeforeHandoff} time={replay.Time:0.00} " +
+                        $"{replay.Message} {replay.ScoreSummary}");
+                    return replay.Message;
+                },
+                guided: true,
+                checkpoint: replay => replay.ContainmentAvailable && replay.HandoffAt == replay.Time
+                    ? "RD has net front." : null,
+                showFirstGuidedShift: true);
+        }
+
         [MenuItem("Tools/Shift Happens/Watch Weak-Side Lane Cut")]
         public static void WatchWeakSideLaneCut() =>
             WatchPointLaneCut(LateCenterSettings(), 0, "Marked upper corner · late C", upperPoint: false);
@@ -382,7 +413,7 @@ namespace ShiftHappens.Editor
 
         private static void WatchReplay(DraftShiftSettings settings, int seed, string setup, string title, string focus,
             string prompt, Func<PracticeShift, string> advance, Func<PracticeShift, string> caption = null,
-            bool guided = false, Func<PracticeShift, string> checkpoint = null)
+            bool guided = false, Func<PracticeShift, string> checkpoint = null, bool showFirstGuidedShift = false)
         {
             var board = UnityEngine.Object.FindAnyObjectByType<RinkPractice>();
             if (!EditorApplication.isPlaying || board == null)
@@ -407,7 +438,7 @@ namespace ShiftHappens.Editor
                 pending = 0;
                 resumeTeachingAt = null;
                 resumeCheckpointAt = 0;
-                if (!board.ShowEditorReplay(replay, setup, focus, Restart))
+                if (!board.ShowEditorReplay(replay, setup, focus, Restart, showFirstGuidedShift))
                 {
                     Debug.LogWarning("Close Review Mode before starting the live replay.");
                     return;
@@ -604,6 +635,7 @@ namespace ShiftHappens.Editor
             Require(shift.Partner.y < start.y, "RD must skate toward net-front coverage.");
             AdvanceUntil(shift, () => shift.ContainmentAvailable, 10f);
             Require(shift.HoldRead == PracticeShift.ReadResult.Met, "Holding until RD is set should meet the first read.");
+            Require(!shift.OpenedSlotBeforeHandoff, "A successful hold must not report an early slot opening.");
             Require(settings.Map(shift.Partner).x < PracticeShift.Center.x, "RD must be goal-side at the handoff.");
             Require(!shift.Containing, "The handoff alone must not count as containing.");
             AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Pass, 14f, () =>
@@ -625,8 +657,10 @@ namespace ShiftHappens.Editor
             AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Pass, 8f);
             Require(shift.SlotFeed && shift.Destination == shift.NetFrontAttacker, "Leaving early must expose a live slot feed, even on the point seed.");
             Require(!shift.HandoffAt.HasValue && shift.HoldRead == PracticeShift.ReadResult.Missed, "An early departure should miss the hold read.");
+            Require(shift.OpenedSlotBeforeHandoff, "The review must retain the early slot opening after Red passes.");
             Require(shift.ContainRead == PracticeShift.ReadResult.Unobserved, "A pass before the handoff must leave containment unobserved.");
             AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 30f);
+            Require(shift.OpenedSlotBeforeHandoff, "The finished review must retain the early slot opening.");
             Debug.Log($"Original early departure: Red {shift.PassReceiver}, {shift.Time:0.00}s, {shift.PuckPossession}, {shift.Message} {shift.ScoreSummary}");
         }
 

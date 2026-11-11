@@ -60,6 +60,7 @@ namespace ShiftHappens
         public string Message { get; private set; } = "RD returns from the bottom corner. Protect the middle.";
         public bool Tied => Time < tiedUntil;
         public bool SlotFeed => slotFeed;
+        public bool OpenedSlotBeforeHandoff => openedSlotBeforeHandoff;
         public bool Paused { get; private set; }
         public bool Reviewing { get; private set; }
         public void SetReviewing(bool active) => Reviewing = active;

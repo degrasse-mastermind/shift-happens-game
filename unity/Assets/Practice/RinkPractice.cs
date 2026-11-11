@@ -11,6 +11,7 @@ namespace ShiftHappens
         private static readonly Color Navy = new(0.06f, 0.12f, 0.21f);
         private static readonly Color Blue = new(0.07f, 0.35f, 0.54f);
         private static readonly Color Amber = new(1f, 0.81f, 0.37f);
+        private static readonly Color HandoffGreen = new(0.40f, 1f, 0.76f);
 
         private PracticeShift shift;
         [SerializeField] private DraftPracticePreset[] presets =
@@ -33,7 +34,9 @@ namespace ShiftHappens
         private RectTransform blueCenter, blueLeftWing, blueRightWing;
         private RectTransform redSupport, redLeftDefense, redRightDefense, redSlot, redGoalie;
         private Text header, status, playLabel, warning, coverage, modeLabel, presetLabel;
+        private Text handoffCue, ldNameplate;
         private RectTransform activeRing;
+        private RectTransform partnerRing;
         private RectTransform[] skaters, blueSkaters, blueNameplates;
         private readonly Rect[] labelBounds = new Rect[6];
         private static readonly Vector2[] LabelOffsets =
@@ -50,6 +53,8 @@ namespace ShiftHappens
         private RectTransform root;
         private bool? portraitLayout;
         private readonly System.Collections.Generic.List<(RectTransform node, Rect desktop, Rect portrait)> layout = new();
+        private bool? replayFirstGuidedShift;
+        private bool FirstGuidedShift => shift.Guided && (replayFirstGuidedShift ?? (presetIndex == 0));
 
         private void Awake()
         {
@@ -179,11 +184,13 @@ namespace ShiftHappens
         }
 
 #if UNITY_EDITOR
-        public bool ShowEditorReplay(PracticeShift replay, string setup, string focus, System.Action restart)
+        public bool ShowEditorReplay(PracticeShift replay, string setup, string focus, System.Action restart,
+            bool showFirstGuidedShift = false)
         {
             if (review.Active) return false;
             enabled = false;
             shift = replay;
+            replayFirstGuidedShift = showFirstGuidedShift;
             presetLabel.text = setup;
             var replayButton = playLabel.transform.parent.GetComponent<Button>();
             foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
@@ -201,11 +208,16 @@ namespace ShiftHappens
         {
             DrawShift();
             header.text = $"LIVE TEST · {title}    {shift.Time:0.00}s";
-            status.text = caption;
-            coverage.text = result;
+            if (!FirstGuidedShift)
+            {
+                status.text = caption;
+                coverage.text = result;
+            }
+            else if (shift.Stage == PracticeShift.Phase.Ready)
+                header.text = caption;
             playLabel.text = "Replay";
             tieButton.interactable = false;
-            if (shift.Stage == PracticeShift.Phase.Pass)
+            if (!FirstGuidedShift && shift.Stage == PracticeShift.Phase.Pass)
                 DrawPassLane(shift.Destination);
         }
 #endif
@@ -244,7 +256,6 @@ namespace ShiftHappens
             Face(redGoalie, shift.Puck - shift.RedGoalie);
             Place(tieMarker, shift.NetFrontAttacker);
             Place(activeRing, shift.Player);
-            PlaceBlueNameplates();
 
             bool warningActive = shift.Stage == PracticeShift.Phase.Warning;
             warning.transform.parent.gameObject.SetActive(warningActive);
@@ -269,8 +280,71 @@ namespace ShiftHappens
                 : shift.Stage == PracticeShift.Phase.Finished ? "Retry"
                 : shift.TeachingPaused ? "Resume read"
                 : shift.Paused ? "Resume" : "Pause";
-            modeLabel.text = guided ? "Guided" : "Freer";
+            modeLabel.text = shift.Guided ? "Guided" : "Freer";
             tieButton.interactable = shift.CanSkate;
+            DrawFirstGuidedShift();
+            PlaceBlueNameplates();
+        }
+
+        private void DrawFirstGuidedShift()
+        {
+            bool firstShift = FirstGuidedShift;
+            bool ready = firstShift && shift.Stage == PracticeShift.Phase.Ready;
+            bool carry = firstShift && shift.Stage == PracticeShift.Phase.Carry;
+            bool finished = firstShift && shift.Stage == PracticeShift.Phase.Finished;
+            Vector2 ldLabelSize = ready ? new Vector2(88, NameplateSize.y) : NameplateSize;
+            blueNameplates[0].sizeDelta = ldLabelSize;
+            ldNameplate.rectTransform.sizeDelta = ldLabelSize;
+            ldNameplate.text = ready ? "YOU · LD" : "LD";
+            handoffCue.transform.parent.gameObject.SetActive(carry);
+            partnerRing.gameObject.SetActive(carry);
+            coverage.resizeTextForBestFit = finished;
+
+            if (ready)
+            {
+                header.text = "GUIDED · DEFEND THE MIDDLE";
+                status.text = "You control Blue LD, the skater with the ring.";
+                coverage.text = "Hold WASD or arrow keys, or drag on the ice to skate.";
+            }
+            if (carry)
+            {
+                bool canClose = shift.ContainmentAvailable;
+                Color color = canClose ? HandoffGreen : Amber;
+                handoffCue.color = color;
+                handoffCue.text = canClose ? "RD HAS NET FRONT\nClose from inside"
+                    : shift.PartnerArrivedWrongSide ? "RD IS OUTSIDE\nStay in front of the net"
+                    : "RD IS RETURNING\nStay in front of the net";
+                Place(partnerRing, shift.Partner);
+                partnerRing.GetComponent<RawImage>().color = color;
+                if (shift.TeachingPaused && !shift.Paused)
+                    status.text = "Watch RD skate back. Stay between the red skater in front and the net.";
+                coverage.text = canClose ? "Skate toward the puck from the middle." : "";
+            }
+            if (!finished) return;
+
+            status.text = "Puck outcome\n" + (shift.PuckPossession == PracticeShift.Possession.Loose
+                ? "Loose puck stayed contested." : shift.Message);
+            coverage.text = FirstShiftDecisionReview();
+        }
+
+        private string FirstShiftDecisionReview()
+        {
+            string hold = shift.HoldRead switch
+            {
+                PracticeShift.ReadResult.Met => "Hold · You kept the middle covered.",
+                PracticeShift.ReadResult.Missed when shift.OpenedSlotBeforeHandoff =>
+                    "Hold · You left early. Red looked for the slot.",
+                PracticeShift.ReadResult.Missed => "Hold · The middle was open too long.",
+                _ => "Hold · Too little play to score."
+            };
+            string contain = shift.ContainRead switch
+            {
+                PracticeShift.ReadResult.Met => "Contain · You closed from inside after RD was set.",
+                PracticeShift.ReadResult.Missed => "Contain · You had time to close. Come from the middle.",
+                _ when !shift.HandoffAt.HasValue => "Contain · Play moved on before RD was set.",
+                _ => "Contain · Play moved on before you had time to close."
+            };
+            return $"{hold}\n{contain}";
         }
 
         private string BehindNetCoverage()
@@ -334,6 +408,7 @@ namespace ShiftHappens
             passLine = Rect("Pass lane", rink, new(0, 1), new(0, 0.5f), Vector2.zero, new(0, 5));
             Panel(passLine, Amber);
             activeRing = Art("Active player ring", "PracticeActiveRing", 58);
+            partnerRing = Art("RD coverage ring", "PracticeActiveRing", 52);
             var youthHockey = Resources.Load<Texture2D>("PracticeYouthHockey");
             partner = HockeyPlayer("Blue RD", youthHockey);
             blueCenter = HockeyPlayer("Blue C", youthHockey);
@@ -356,6 +431,12 @@ namespace ShiftHappens
                 redLeftDefense, redRightDefense, redSlot, redGoalie, carrier, puckLocator };
             blueNameplates = new[] { Nameplate("LD"), Nameplate("RD"), Nameplate("C"), Nameplate("LW"),
                 Nameplate("RW"), Nameplate("G") };
+            ldNameplate = blueNameplates[0].GetComponentInChildren<Text>();
+
+            var handoffPanel = Rect("Guided handoff panel", rink, new(.5f, 1), new(.5f, 1),
+                new(0, -12), new(320, 58));
+            Panel(handoffPanel, Navy);
+            handoffCue = Label("Guided handoff cue", handoffPanel, Vector2.zero, handoffPanel.sizeDelta, 21, Amber);
 
             var warningPanel = Rect("Pass warning panel", rink, new(0, 1), new(0, 1), new(12, -12), new(322, 45));
             Panel(warningPanel, Amber);
@@ -364,6 +445,8 @@ namespace ShiftHappens
 
             status = Label("Play by play", root, new(720, -134), new(268, 118), 22, Color.white);
             coverage = Label("Coaching cue and scoring", root, new(720, -255), new(268, 126), 22, Amber);
+            coverage.resizeTextMinSize = 16;
+            coverage.resizeTextMaxSize = 22;
             Responsive(status.rectTransform, new(26, -704, 274, 100));
             Responsive(coverage.rectTransform, new(340, -704, 274, 100));
             playLabel = Control("Start", root, new(720, -408, 268, 60), () =>
@@ -461,14 +544,15 @@ namespace ShiftHappens
             for (int i = 0; i < blueSkaters.Length; i++)
             {
                 Vector2 origin = blueSkaters[i].anchoredPosition;
+                Vector2 size = blueNameplates[i].sizeDelta;
                 float bestCost = float.PositiveInfinity;
                 Rect best = default;
                 for (int slot = 0; slot < LabelOffsets.Length; slot++)
                 {
                     Vector2 center = origin + LabelOffsets[slot];
-                    center.x = Mathf.Clamp(center.x, NameplateSize.x / 2f, DefensiveZoneView.Width - NameplateSize.x / 2f);
-                    center.y = Mathf.Clamp(center.y, -DefensiveZoneView.Height + NameplateSize.y / 2f, -NameplateSize.y / 2f);
-                    var bounds = new Rect(center - NameplateSize * .5f, NameplateSize);
+                    center.x = Mathf.Clamp(center.x, size.x / 2f, DefensiveZoneView.Width - size.x / 2f);
+                    center.y = Mathf.Clamp(center.y, -DefensiveZoneView.Height + size.y / 2f, -size.y / 2f);
+                    var bounds = new Rect(center - size * .5f, size);
                     float cost = slot * 2f;
                     foreach (var skater in skaters)
                         if (bounds.Overlaps(new Rect(skater.anchoredPosition - skater.sizeDelta * .5f, skater.sizeDelta)))
