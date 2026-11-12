@@ -26,6 +26,7 @@ namespace ShiftHappens
         public string createdUtc = DateTime.UtcNow.ToString("O");
         public string scope = "This moment";
         public string scene;
+        public string preset;
         public string buildVersion;
         public string unityVersion;
         public string mode;

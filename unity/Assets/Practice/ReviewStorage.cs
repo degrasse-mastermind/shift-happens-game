@@ -69,6 +69,8 @@ namespace ShiftHappens
             foreach (var note in bundle.notes)
             {
                 text.AppendLine($"\n## {note.id}\n\n**Scope: {note.scope}** | {note.mode}, seed {note.seed}, captured at {note.gameTime:0.00}s ({note.phase})\n\nScene: {note.scene}; build: {note.buildVersion}; possession: {note.possession}\n\n{note.orientation}\n\n{note.coordinates}");
+                if (!string.IsNullOrEmpty(note.preset))
+                    text.AppendLine($"\nPreset played: {note.preset}");
                 if (!string.IsNullOrEmpty(note.positioningReview))
                     text.AppendLine($"\n{note.positioningReview}");
                 text.AppendLine($"\n![Annotated review]({note.id}/annotated.png)\n\n### David's note\n{note.note}\n\n### Proposed annotations");

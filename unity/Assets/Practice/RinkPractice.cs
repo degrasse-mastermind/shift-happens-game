@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 namespace ShiftHappens
 {
-    public sealed class RinkPractice : MonoBehaviour
+    public sealed partial class RinkPractice : MonoBehaviour
     {
         private static readonly Color Navy = new(0.06f, 0.12f, 0.21f);
         private static readonly Color Blue = new(0.07f, 0.35f, 0.54f);
@@ -22,7 +22,9 @@ namespace ShiftHappens
             new() { Name = "Behind net · delayed exit", Settings = DraftShiftSettings.BehindNetPreset(2) },
         };
         private int presetIndex;
-        private DraftShiftSettings draftCoaching => presets[presetIndex].Settings;
+        private DraftShiftSettings draftCoaching => appliedTuning ?? presets[presetIndex].Settings;
+        private string PracticePresetName => appliedTuning == null
+            ? presets[presetIndex].Name : $"Draft · {appliedTuningName}";
         internal bool IsMirrored => shift.Mirrored;
         internal Texture2D PuckTexture => puckTexture;
         private bool guided = true;
@@ -75,7 +77,7 @@ namespace ShiftHappens
         private void Update()
         {
             ApplyLayout();
-            if (review != null && review.Active) return;
+            if (tuningPanel.activeSelf || (review != null && review.Active)) return;
             var keyboard = Keyboard.current;
             if (keyboard != null)
             {
@@ -129,7 +131,8 @@ namespace ShiftHappens
             return new ReviewNote
             {
                 scope = starting ? "Starting setup" : "This moment",
-                scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + " / " + presets[presetIndex].Name,
+                scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + " / " + PracticePresetName,
+                preset = PracticePresetName,
                 buildVersion = Application.version + " / ReviewMode-v1",
                 unityVersion = Application.unityVersion,
                 mode = guided ? "Guided" : "Freer",
@@ -183,7 +186,7 @@ namespace ShiftHappens
         private void SelectSeed(int seed)
         {
             shift = new PracticeShift(seed, draftCoaching, guided);
-            presetLabel.text = $"Scenario ▸ {presets[presetIndex].Name}";
+            presetLabel.text = $"Scenario ▸ {PracticePresetName}";
             usingKeys = false;
             activePointer = null;
             DrawShift();
@@ -217,10 +220,18 @@ namespace ShiftHappens
         }
 
 #if UNITY_EDITOR
+        public bool TryGetOriginalReplay(out DraftShiftSettings settings, out int seed, out string setup)
+        {
+            settings = draftCoaching.Copy();
+            seed = (practiceBeforeReplay ?? shift).Seed;
+            setup = PracticePresetName;
+            return presetIndex == 0 && !tuningPanel.activeSelf;
+        }
+
         public bool ShowEditorReplay(PracticeShift replay, string setup, string focus, System.Action restart, System.Action stop,
             bool showFirstGuidedShift = false)
         {
-            if (review.Active) return false;
+            if (review.Active || tuningPanel.activeSelf) return false;
             practiceBeforeReplay ??= shift;
             restartReplay = restart;
             stopReplay = stop;
@@ -248,7 +259,7 @@ namespace ShiftHappens
             replayFirstGuidedShift = null;
             usingKeys = false;
             activePointer = null;
-            presetLabel.text = $"Scenario ▸ {presets[presetIndex].Name}";
+            presetLabel.text = $"Scenario ▸ {PracticePresetName}";
             newVariationLabel.text = "New variation";
             foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
                 button.interactable = true;
@@ -262,7 +273,12 @@ namespace ShiftHappens
         {
             DrawShift();
             header.text = $"LIVE TEST · {title}    {shift.Time:0.00}s";
-            if (!FirstGuidedShift)
+            if (shift.BehindNetScenario && shift.Stage == PracticeShift.Phase.Finished)
+            {
+                status.text = shift.Message;
+                coverage.text = shift.ScoreSummary;
+            }
+            else if (!FirstGuidedShift)
             {
                 status.text = caption;
                 coverage.text = result;
@@ -340,6 +356,7 @@ namespace ShiftHappens
                 : shift.Paused ? "Resume" : "Pause";
             modeLabel.text = shift.Guided ? "Mode ▸ Guided" : "Mode ▸ Freer";
             variationLabel.text = $"Variation #{shift.Seed}";
+            tuneButton.gameObject.SetActive(presetIndex == 0 && !replayFirstGuidedShift.HasValue);
             resetShiftButton.interactable = !replayFirstGuidedShift.HasValue && shift.Stage != PracticeShift.Phase.Ready;
             tieButton.interactable = shift.CanSkate;
             DrawFirstGuidedShift();
@@ -381,7 +398,8 @@ namespace ShiftHappens
                 partnerRing.GetComponent<RawImage>().color = rdSet ? HandoffGreen : Amber;
                 if (shift.TeachingPaused && !shift.Paused)
                     status.text = "Watch RD skate back. Stay between the red skater in front and the net.";
-                coverage.text = rdSet ? "RD is between the attacker and the net, facing the play."
+                coverage.text = rdSet ? $"RD set at {shift.HandoffAt:0.00}s. Goal-side and facing the play."
+                    : shift.PartnerSettling ? "RD is in place and facing the play. Wait for coverage."
                     : shift.SlotLaneCovered ? "Keep the pass to the middle covered."
                     : "The pass to the middle is open.";
             }
@@ -394,6 +412,7 @@ namespace ShiftHappens
             status.text = "Puck outcome\n" + (shift.PuckPossession == PracticeShift.Possession.Loose
                 ? "Loose puck stayed contested." : shift.Message);
             coverage.text = FirstShiftDecisionReview();
+            if (shift.HandoffAt is float handoff) coverage.text += $"\nRD set at {handoff:0.00}s.";
         }
 
         private string FirstShiftDecisionReview()
@@ -420,9 +439,8 @@ namespace ShiftHappens
         {
             if (shift.PuckPossession != PracticeShift.Possession.RedCarrier) return "Track the puck through the play";
             if (!shift.Guided && shift.Stage != PracticeShift.Phase.Ready) return "FREER  /  Draft scores after the shift";
-            if (!shift.SlotLaneCovered) return "LD: Close to Red C from inside.";
-            return shift.BehindNetExitAt.HasValue ? "RD takes the puck side  |  LD stays with Red C"
-                : "LD holds inside  |  Watch Red C";
+            if (!shift.SlotLaneCovered) return "Get back between Red C and the net.";
+            return shift.BehindNetRoleCue;
         }
 
         private void DrawPassLane(Vector2 destination)
@@ -466,13 +484,15 @@ namespace ShiftHappens
             Responsive(setupHeading.rectTransform, new(26, -900, 274, 28));
             presetLabel = Control("Scenario", root, new(720, -464, 268, 44), () =>
             {
+                appliedTuning = null;
+                appliedTuningName = null;
                 presetIndex = (presetIndex + 1) % presets.Length;
                 SelectSeed(shift.Seed);
             }, out _);
             presetLabel.fontSize = 17;
             Responsive(presetLabel, new(26, -932, 274, 52));
             Responsive(Control("Review / Export", root, new(720, -726, 268, 44), () => review.Begin(), out _),
-                new(26, -1070, 588, 54));
+                new(340, -1070, 274, 54));
             rink = Rect("Defensive zone", root, new(0, 1), new(0, 1), new(22, -55),
                 new(DefensiveZoneView.Width, DefensiveZoneView.Height));
             Responsive(rink, new((640f - DefensiveZoneView.Width) / 2f, -42, DefensiveZoneView.Width, DefensiveZoneView.Height));
@@ -548,6 +568,7 @@ namespace ShiftHappens
                 SelectSeed(shift.Seed);
             }, out _);
             Responsive(modeLabel, new(340, -932, 274, 52));
+            BuildTuningDisplay();
 
             var input = new GameObject("Practice Input", typeof(EventSystem), typeof(InputSystemUIInputModule));
             input.transform.SetParent(transform, false);
@@ -564,9 +585,10 @@ namespace ShiftHappens
         private void Responsive(RectTransform node, Rect portrait) =>
             layout.Add((node, new Rect(node.anchoredPosition, node.sizeDelta), portrait));
 
-        private void ApplyLayout()
+        private void ApplyLayout() => ApplyLayoutForOrientation(Screen.height > Screen.width);
+
+        private void ApplyLayoutForOrientation(bool portrait)
         {
-            bool portrait = Screen.height > Screen.width;
             if (portraitLayout == portrait) return;
             portraitLayout = portrait;
             root.sizeDelta = portrait ? new Vector2(640, 1148) : new Vector2(1024, 860);

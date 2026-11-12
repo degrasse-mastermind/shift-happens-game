@@ -32,7 +32,8 @@ namespace ShiftHappens.Editor
                 CheckPointLaneCut(new DraftShiftSettings(), upperPoint: true);
                 CheckBehindNet(false);
                 CheckBehindNet(true);
-                Debug.Log("PRACTICE_CHECKS_PASSED (18 checks)");
+                CheckBehindNetLateRecovery();
+                Debug.Log("PRACTICE_CHECKS_PASSED (19 checks)");
             }
             catch (Exception exception)
             {
@@ -128,25 +129,26 @@ namespace ShiftHappens.Editor
         [MenuItem("Tools/Shift Happens/Watch Behind Net/Delayed exit")]
         public static void WatchBehindNetDelayed() => WatchBehindNet(false, 2);
 
-        private static void WatchBehindNet(bool chase, float wait)
+        [MenuItem("Tools/Shift Happens/Watch Behind Net/Late recovery")]
+        public static void WatchBehindNetLateRecovery() => WatchBehindNet(false, 0, recoverLate: true);
+
+        private static void WatchBehindNet(bool chase, float wait, bool recoverLate = false)
         {
             string setup = wait > 0 ? "Behind net · delayed exit" : "Behind net";
             WatchReplay(DraftShiftSettings.BehindNetPreset(wait), 1, setup, "BEHIND THE NET · DRAFT", "LD",
-                chase ? "Compare what opens when LD chases" : "Watch LD cover Red C from the inside",
+                recoverLate ? "Watch LD reopen and then close the slot lane"
+                    : chase ? "Compare what opens when LD chases" : "Watch LD cover Red C from the inside",
                 replay =>
                 {
-                    SteerBehindNet(replay, chase, trackThreat: wait <= 0f);
+                    if (recoverLate) SteerLateRecovery(replay);
+                    else SteerBehindNet(replay, chase, trackThreat: wait <= 0f);
                     replay.Step(ReplayStep);
                     if (replay.Stage != PracticeShift.Phase.Finished) return null;
-                    Debug.Log($"LIVE_BEHIND_NET chase={chase} wait={wait:0.0} " +
+                    Debug.Log($"LIVE_BEHIND_NET chase={chase} lateRecovery={recoverLate} wait={wait:0.0} " +
                         $"slot={replay.SlotFeed} end={replay.Time:0.00} {replay.Message} {replay.ScoreSummary}");
                     return $"{replay.Message}  {replay.ScoreSummary}";
                 },
-                replay => replay.Stage != PracticeShift.Phase.Carry ? replay.Message
-                    : replay.BehindNetExitAt.HasValue ? "RD moves out. LD is responsible for Red C."
-                    : replay.BehindNetPastFarPost ? "Red rounds the far post. Keep Red C covered."
-                    : replay.BehindNetCrossing ? "Red crosses behind the net. Watch both posts and the slot."
-                    : "Red approaches the goal line. Watch LD and the slot.",
+                replay => replay.Stage == PracticeShift.Phase.Carry ? replay.BehindNetRoleCue : replay.Message,
                 guided: true);
         }
 
@@ -207,6 +209,39 @@ namespace ShiftHappens.Editor
                 chased.ContainRead == PracticeShift.ReadResult.Missed, "Draft reads must reflect LD's coverage.");
         }
 
+        private static void SteerLateRecovery(PracticeShift shift)
+        {
+            if (!shift.BehindNetExitAt.HasValue)
+            {
+                SteerBehindNet(shift, chase: false, trackThreat: true);
+                return;
+            }
+            Vector2 threat = shift.NetFrontAttacker;
+            if (shift.Stage == PracticeShift.Phase.Carry)
+                shift.SkateTo(threat);
+            else if (shift.Stage == PracticeShift.Phase.Warning)
+            {
+                Vector2 net = new(shift.Goalie.x, PracticeShift.Center.y);
+                shift.SkateTo(threat + (net - threat).normalized * 45f);
+            }
+        }
+
+        private static void CheckBehindNetLateRecovery()
+        {
+            var shift = new PracticeShift(1, DraftShiftSettings.BehindNetPreset(), guided: false);
+            shift.TogglePlay();
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Warning, 10f,
+                () => SteerLateRecovery(shift));
+            Require(!shift.SlotLaneCovered, "Red must see an open slot before LD recovers.");
+            AdvanceUntil(shift, () => shift.Stage == PracticeShift.Phase.Finished, 20f,
+                () => SteerLateRecovery(shift));
+            Require(!shift.SlotFeed && shift.HoldRead == PracticeShift.ReadResult.Met &&
+                shift.ContainRead == PracticeShift.ReadResult.Missed &&
+                shift.ScoreSummary.Contains("Red saw an open slot."),
+                "Recovery should redirect the pass without erasing the opening LD gave Red.");
+            Debug.Log($"BEHIND_NET_LATE_RECOVERY slot={shift.SlotFeed} {shift.ScoreSummary}");
+        }
+
         private static EditorApplication.CallbackFunction liveReplayTick;
         private const float ReplayStep = 0.02f;
 
@@ -216,10 +251,24 @@ namespace ShiftHappens.Editor
         [MenuItem("Tools/Shift Happens/Watch First Guided Shift/Leave early")]
         private static void WatchFirstGuidedEarly() => WatchFirstGuidedShift(leaveEarly: true);
 
-        private static void WatchFirstGuidedShift(bool leaveEarly)
+        [MenuItem("Tools/Shift Happens/Watch First Guided Shift/Hold then close in current setup")]
+        private static void WatchCurrentOriginal()
+        {
+            var board = UnityEngine.Object.FindAnyObjectByType<RinkPractice>();
+            if (!EditorApplication.isPlaying || board == null ||
+                !board.TryGetOriginalReplay(out var settings, out int seed, out string setup))
+            {
+                Debug.LogWarning("In Play Mode, select Original or apply an RD draft before watching the replay.");
+                return;
+            }
+            WatchFirstGuidedShift(leaveEarly: false, settings, seed, setup);
+        }
+
+        private static void WatchFirstGuidedShift(bool leaveEarly, DraftShiftSettings settings = null, int seed = 1,
+            string setup = "Original")
         {
             string choice = leaveEarly ? "Leave early" : "Hold then close";
-            WatchReplay(new DraftShiftSettings(), 1, "Original · Seed 1", $"{choice.ToUpperInvariant()} · SEED 1", "LD",
+            WatchReplay(settings ?? new DraftShiftSettings(), seed, setup, $"{choice.ToUpperInvariant()} · SEED {seed}", "LD",
                 leaveEarly ? "Watch LD leave before RD is set." : "Watch LD wait for RD, then close from inside.",
                 replay =>
                 {

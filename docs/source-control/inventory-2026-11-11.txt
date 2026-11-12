@@ -1,0 +1,25 @@
+ M docs/handoff-validation.md
+ M unity/Assets/Practice/DraftShiftSettings.cs
+ M unity/Assets/Practice/Editor/PracticeValidation.cs
+ M unity/Assets/Practice/PracticeShift.cs
+ M unity/Assets/Practice/RinkPractice.cs
+ M unity/Assets/Practice/ZoneSkating.cs
+ M unity/Assets/VisualProof/StylizedProProof.unity
+ M unity/ProjectSettings/UnityConnectSettings.asset
+?? .codex/
+?? docs/arcade-ice-helmet-labels-concept.png
+?? docs/arcade-ice-nameplates-crowd-phone.gif
+?? docs/arcade-ice-nameplates-offset-phone.gif
+?? docs/arcade-ice-nameplates-phone-comparison.gif
+?? docs/arcade-ice-nameplates-phone-handoff.gif
+?? docs/arcade-ice-overhead-character-concept.png
+?? docs/arcade-ice-position-label-concepts.png
+?? docs/behind-the-net-ld-rink-diagram.png
+?? docs/source-control/
+?? meshy_output/
+?? unity/Assets/Practice/BehindNetRotation.cs
+?? unity/Assets/Practice/BehindNetRotation.cs.meta
+?? unity/Assets/VisualProof/BlueDefensemanMeshy.fbx
+?? unity/Assets/VisualProof/BlueDefensemanMeshy.fbx.meta
+?? unity/Assets/VisualProof/BlueDefensemanMeshy.md
+?? unity/Assets/VisualProof/BlueDefensemanMeshy.md.meta

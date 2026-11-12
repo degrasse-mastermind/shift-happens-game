@@ -44,6 +44,7 @@ namespace ShiftHappens
         public Vector2 RedLeftDefense => skating.LowerPoint;
         public Vector2 RedGoalie => skating.RedGoalie;
         public bool PartnerHasCoverage { get; private set; }
+        public bool PartnerSettling => coverageStableTime > 0f && !PartnerHasCoverage;
         public bool PartnerArrivedWrongSide => Vector2.Distance(Partner, PartnerCoverageTarget) <= 5f &&
             settings.Map(Partner).x >= settings.Map(NetFrontAttacker).x;
         public float? HandoffAt { get; private set; }
@@ -72,8 +73,13 @@ namespace ShiftHappens
         public bool SlotLaneCovered => NetFrontLaneCovered();
         public Vector2 Goalie { get; private set; }
         public string ScoreSummary => BehindNetScenario
-            ? $"DRAFT SCORE  Hold inside: {HoldRead}  |  Cover Red C: {ContainRead}"
+            ? $"DRAFT  Hold inside: {HoldRead}\nCover Red C: {ContainRead}" +
+                (behindNetSlotLookConceded ? "\nRed saw an open slot." : "")
             : $"FINAL SCORE  Hold: {HoldRead}{(openedSlotBeforeHandoff ? " (left net front and opened slot)" : "")}  |  Contain: {ContainRead}";
+        public string BehindNetRoleCue => BehindNetExitAt.HasValue ? "RD takes the carrier. LD stays with Red C."
+            : BehindNetPastFarPost ? "Red rounds the far post. Stay inside Red C."
+            : BehindNetCrossing ? "Red crosses behind the net. RD guards the far post. LD stays with Red C."
+            : "Red approaches the goal line. Stay inside Red C.";
         public string PositioningSummary
         {
             get
@@ -113,6 +119,7 @@ namespace ShiftHappens
         private bool teachingShown;
         private bool slotFeed;
         private bool openedSlotBeforeHandoff;
+        private bool behindNetSlotLookConceded;
         private Vector2 PartnerCoverageTarget
         {
             get
@@ -220,7 +227,7 @@ namespace ShiftHappens
             {
                 teachingShown = true;
                 TeachingPaused = true;
-                Message = BehindNetScenario ? "Hold inside. RD seals the other post and C protects the slot."
+                Message = BehindNetScenario ? "Stay between Red C and the net. RD guards the far post."
                     : "RD is still returning. Protect the middle, then resume and read the handoff.";
                 return;
             }
@@ -315,8 +322,7 @@ namespace ShiftHappens
                     BehindNetExitAt = Time;
                     HoldRead = EvaluateHold();
                     openLaneTime = 0;
-                    Message = Guided ? "RD takes the carrier. Stay goal-side of Red C."
-                        : "Red comes out on the other side.";
+                    Message = "Red comes out on the other side.";
                 }
                 return;
             }
@@ -340,6 +346,7 @@ namespace ShiftHappens
             if (!BehindNetExitAt.HasValue) return;
             if (openLaneTime >= .5f)
             {
+                behindNetSlotLookConceded = true;
                 slotFeed = true;
                 WarnForPass("The slot opened. Red looks for Red C.");
                 return;
@@ -499,7 +506,8 @@ namespace ShiftHappens
             if (BehindNetScenario)
             {
                 if (ContainRead == ReadResult.Pending)
-                    ContainRead = containEligibleTime < .5f ? ReadResult.Unobserved
+                    ContainRead = behindNetSlotLookConceded ? ReadResult.Missed
+                        : containEligibleTime < .5f ? ReadResult.Unobserved
                         : exitCoveredTime / containEligibleTime >= settings.RequiredHoldCoverage ? ReadResult.Met : ReadResult.Missed;
                 return;
             }

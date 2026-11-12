@@ -33,3 +33,5 @@ In practice, use WASD, arrow keys, or drag on the rink to steer **Blue LD**. Sta
 Browser coaching reference commands run from `reference/browser` with `pnpm dev`, `pnpm build`, or `node --test src/game.test.js`.
 
 Implementation and validation details are recorded in `docs/implementation-plan.md` and `docs/handoff-validation.md`.
+
+The [positioning standards](docs/positioning-standards.md) describe how the game evaluates coverage and handoffs. The [coach-review guide](docs/coach-review-guide.md) lists the replays and decisions for reviewing the draft Behind net drills.
