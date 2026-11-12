@@ -1,0 +1,1 @@
+I’m going to map that blueprint against the actual project now, so its starting controls reflect what’s already built rather than a generic wish list.

@@ -54,3 +54,11 @@ Then inspect and reuse the existing Unity work. Build the sequence so the player
 Make sensible routine decisions and keep progress moving. Ask when a consequential product decision, unclear hockey rule or required permission blocks the next step. Prefer diagrams and playable examples over lengthy explanations. Surface important blockers promptly.
 
 Defer multiplayer, seasons, elaborate rewards, customization and advanced visual polish until the core defensive shift is accurate, understandable and enjoyable.
+
+## Game-controls governance (November 12, 2026 UTC)
+
+Before planning or implementing hockey simulation controls, scenario configuration, coaching evaluation or presentation integration, read and follow `docs/game-controls/GOVERNING-GAME-CONTROLS.md`. It supplements the instructions above and preserves their existing product and coaching requirements.
+
+Start with the scoped Practice Tuning v1 flow around the existing Original drill. Keep the baseline safe, apply draft changes on explicit restart, preserve Review Mode and coordinate mapping, and verify baseline-equivalent behavior. Do not treat the archived proposals as completed features or as coach approval of draft scenarios.
+
+The five source responses are preserved verbatim in `docs/game-controls/source-responses/`; see `docs/game-controls/README.md` for their order and dates.
