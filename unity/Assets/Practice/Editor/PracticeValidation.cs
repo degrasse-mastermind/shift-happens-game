@@ -132,10 +132,10 @@ namespace ShiftHappens.Editor
         {
             string setup = wait > 0 ? "Behind net · delayed exit" : "Behind net";
             WatchReplay(DraftShiftSettings.BehindNetPreset(wait), 1, setup, "BEHIND THE NET · DRAFT", "LD",
-                chase ? "Compare what opens when LD chases" : "Watch LD protect Red C as the puck changes sides",
+                chase ? "Compare what opens when LD chases" : "Watch LD cover Red C from the inside",
                 replay =>
                 {
-                    SteerBehindNet(replay, chase);
+                    SteerBehindNet(replay, chase, trackThreat: wait <= 0f);
                     replay.Step(ReplayStep);
                     if (replay.Stage != PracticeShift.Phase.Finished) return null;
                     Debug.Log($"LIVE_BEHIND_NET chase={chase} wait={wait:0.0} " +
@@ -150,10 +150,19 @@ namespace ShiftHappens.Editor
                 guided: true);
         }
 
-        private static void SteerBehindNet(PracticeShift shift, bool chase)
+        private static void SteerBehindNet(PracticeShift shift, bool chase, bool trackThreat)
         {
-            if (chase && shift.Time >= 2f && !shift.BehindNetExitAt.HasValue)
-                shift.SkateTo(shift.Carrier);
+            if (chase)
+            {
+                if (shift.Time >= 2f && !shift.BehindNetExitAt.HasValue)
+                    shift.SkateTo(shift.Carrier);
+                return;
+            }
+            if (!trackThreat || shift.Stage != PracticeShift.Phase.Carry) return;
+
+            Vector2 net = new(shift.Goalie.x, PracticeShift.Center.y);
+            Vector2 threat = shift.NetFrontAttacker;
+            shift.SkateTo(threat + (net - threat).normalized * 55f);
         }
 
         private static void CheckBehindNet(bool delayed)
@@ -169,7 +178,7 @@ namespace ShiftHappens.Editor
                 float? firstPost = null;
                 while (shift.Stage != PracticeShift.Phase.Finished)
                 {
-                    SteerBehindNet(shift, chase);
+                    SteerBehindNet(shift, chase, trackThreat: !delayed);
                     shift.Step(ReplayStep);
                     if (shift.TeachingPaused)
                     {
@@ -209,7 +218,9 @@ namespace ShiftHappens.Editor
 
         private static void WatchFirstGuidedShift(bool leaveEarly)
         {
-            WatchReplay(new DraftShiftSettings(), 1, "Original handoff", "FIRST GUIDED SHIFT", "LD", "",
+            string choice = leaveEarly ? "Leave early" : "Hold then close";
+            WatchReplay(new DraftShiftSettings(), 1, "Original · Seed 1", $"{choice.ToUpperInvariant()} · SEED 1", "LD",
+                leaveEarly ? "Watch LD leave before RD is set." : "Watch LD wait for RD, then close from inside.",
                 replay =>
                 {
                     if (replay.Stage == PracticeShift.Phase.Carry)

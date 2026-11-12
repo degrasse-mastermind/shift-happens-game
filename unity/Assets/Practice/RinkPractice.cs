@@ -33,7 +33,8 @@ namespace ShiftHappens
         private RectTransform player, partner, carrier, puck, puckLocator, goalie, tieMarker, passLine;
         private RectTransform blueCenter, blueLeftWing, blueRightWing;
         private RectTransform redSupport, redLeftDefense, redRightDefense, redSlot, redGoalie;
-        private Text header, status, playLabel, warning, coverage, modeLabel, presetLabel;
+        private Text header, status, playLabel, warning, coverage, modeLabel, presetLabel, variationLabel;
+        private Button resetShiftButton;
         private Text handoffCue, ldNameplate;
         private RectTransform activeRing;
         private RectTransform partnerRing;
@@ -45,8 +46,8 @@ namespace ShiftHappens
             new(0,23), new(-22,23), new(22,23), new(0,-44), new(0,44),
             new(-42,-36), new(42,-36), new(-42,36), new(42,36),
         };
-        private Button tieButton, newOpponentButton;
-        private Text newOpponentLabel;
+        private Button tieButton, newVariationButton;
+        private Text newVariationLabel;
         private Pointer activePointer;
         private ReviewMode review;
         private CanvasGroup practiceControls;
@@ -182,7 +183,7 @@ namespace ShiftHappens
         private void SelectSeed(int seed)
         {
             shift = new PracticeShift(seed, draftCoaching, guided);
-            presetLabel.text = $"Setup ▸ {presets[presetIndex].Name}";
+            presetLabel.text = $"Scenario ▸ {presets[presetIndex].Name}";
             usingKeys = false;
             activePointer = null;
             DrawShift();
@@ -201,7 +202,7 @@ namespace ShiftHappens
             shift.TogglePlay();
         }
 
-        private void NewOpponentOrReturnToPractice()
+        private void NewVariationOrReturnToPractice()
         {
 #if UNITY_EDITOR
             if (practiceBeforeReplay != null)
@@ -210,7 +211,9 @@ namespace ShiftHappens
                 return;
             }
 #endif
-            SelectSeed(Random.Range(0, int.MaxValue));
+            int seed = Random.Range(0, int.MaxValue - 1);
+            if (seed >= shift.Seed) seed++;
+            SelectSeed(seed);
         }
 
 #if UNITY_EDITOR
@@ -225,10 +228,10 @@ namespace ShiftHappens
             shift = replay;
             replayFirstGuidedShift = showFirstGuidedShift;
             presetLabel.text = setup;
-            newOpponentLabel.text = "Back to practice";
+            newVariationLabel.text = "Back to practice";
             var replayButton = playLabel.transform.parent.GetComponent<Button>();
             foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
-                button.interactable = button == replayButton || button == newOpponentButton;
+                button.interactable = button == replayButton || button == newVariationButton;
             var highlight = new Color(0f, 0.40f, 0.39f, .97f);
             blueNameplates[2].GetComponent<UnityEngine.UI.Image>().color = focus == "C" ? highlight : NameplateBlue;
             blueNameplates[3].GetComponent<UnityEngine.UI.Image>().color = focus == "LW" ? highlight : NameplateBlue;
@@ -245,8 +248,8 @@ namespace ShiftHappens
             replayFirstGuidedShift = null;
             usingKeys = false;
             activePointer = null;
-            presetLabel.text = $"Setup ▸ {presets[presetIndex].Name}";
-            newOpponentLabel.text = "New opponent";
+            presetLabel.text = $"Scenario ▸ {presets[presetIndex].Name}";
+            newVariationLabel.text = "New variation";
             foreach (var button in practiceControls.GetComponentsInChildren<Button>(true))
                 button.interactable = true;
             foreach (var nameplate in blueNameplates)
@@ -266,9 +269,9 @@ namespace ShiftHappens
             }
             else if (shift.Stage == PracticeShift.Phase.Ready)
             {
-                header.text = caption;
-                status.text = "Watch Blue LD in this scripted replay.";
-                coverage.text = "Choose Back to practice to skate.";
+                header.text = title;
+                status.text = caption;
+                coverage.text = result;
             }
             playLabel.text = "Replay";
             tieButton.interactable = false;
@@ -319,7 +322,7 @@ namespace ShiftHappens
             tieMarker.GetComponent<RawImage>().color = shift.Tied ? Blue : Amber;
             if (warningActive) DrawPassLane(shift.NetFrontAttacker);
 
-            header.text = $"{(shift.BehindNetScenario ? "DRAFT COACHING" : "CUES & SCORING FINAL")}     SEED {shift.Seed}  ·  {shift.Time:0.0}s";
+            header.text = $"{(shift.BehindNetScenario ? "DRAFT COACHING" : "CUES & SCORING FINAL")}     {shift.Time:0.0}s";
             status.text = shift.Paused ? "Paused" : shift.Message;
             coverage.text = shift.Stage == PracticeShift.Phase.Finished ? shift.ScoreSummary
                 : shift.BehindNetScenario ? BehindNetCoverage()
@@ -335,7 +338,9 @@ namespace ShiftHappens
                 : shift.Stage == PracticeShift.Phase.Finished ? "Retry"
                 : shift.TeachingPaused ? "Resume read"
                 : shift.Paused ? "Resume" : "Pause";
-            modeLabel.text = shift.Guided ? "Guided" : "Freer";
+            modeLabel.text = shift.Guided ? "Mode ▸ Guided" : "Mode ▸ Freer";
+            variationLabel.text = $"Variation #{shift.Seed}";
+            resetShiftButton.interactable = !replayFirstGuidedShift.HasValue && shift.Stage != PracticeShift.Phase.Ready;
             tieButton.interactable = shift.CanSkate;
             DrawFirstGuidedShift();
             PlaceBlueNameplates();
@@ -363,17 +368,26 @@ namespace ShiftHappens
             }
             if (carry)
             {
-                bool canClose = shift.ContainmentAvailable;
-                Color color = canClose ? HandoffGreen : Amber;
-                handoffCue.color = color;
-                handoffCue.text = canClose ? "RD HAS NET FRONT\nClose from inside"
-                    : shift.PartnerArrivedWrongSide ? "RD IS OUTSIDE\nStay in front of the net"
-                    : "RD IS RETURNING\nStay in front of the net";
+                bool rdSet = shift.PartnerHasCoverage;
+                string rdCue = rdSet ? "RD: Net front covered"
+                    : shift.PartnerArrivedWrongSide ? "RD: On the outside"
+                    : shift.HandoffAt.HasValue ? "RD: Coverage lost" : "RD: Getting set";
+                string ldCue = shift.ContainmentAvailable ? "LD: Close from inside"
+                    : rdSet ? "LD: Stay inside"
+                    : shift.SlotLaneCovered ? "LD: Hold net front" : "LD: Get back to net front";
+                handoffCue.color = Color.white;
+                handoffCue.text = rdCue + "\n" + ldCue;
                 Place(partnerRing, shift.Partner);
-                partnerRing.GetComponent<RawImage>().color = color;
+                partnerRing.GetComponent<RawImage>().color = rdSet ? HandoffGreen : Amber;
                 if (shift.TeachingPaused && !shift.Paused)
                     status.text = "Watch RD skate back. Stay between the red skater in front and the net.";
-                coverage.text = canClose ? "Skate toward the puck from the middle." : "";
+                coverage.text = rdSet ? "RD is between the attacker and the net, facing the play."
+                    : shift.SlotLaneCovered ? "Keep the pass to the middle covered."
+                    : "The pass to the middle is open.";
+            }
+            if (firstShift && shift.Stage == PracticeShift.Phase.Warning && shift.OpenedSlotBeforeHandoff)
+            {
+                coverage.text = "LD left net front early. Red sees a pass to the middle.";
             }
             if (!finished) return;
 
@@ -406,6 +420,7 @@ namespace ShiftHappens
         {
             if (shift.PuckPossession != PracticeShift.Possession.RedCarrier) return "Track the puck through the play";
             if (!shift.Guided && shift.Stage != PracticeShift.Phase.Ready) return "FREER  /  Draft scores after the shift";
+            if (!shift.SlotLaneCovered) return "LD: Close to Red C from inside.";
             return shift.BehindNetExitAt.HasValue ? "RD takes the puck side  |  LD stays with Red C"
                 : "LD holds inside  |  Watch Red C";
         }
@@ -442,15 +457,22 @@ namespace ShiftHappens
             var controls = Rect("Practice controls", root, new(0, 1), new(0, 1), new(704, -55), new(300, 735));
             Panel(controls, new Color(.09f, .17f, .27f));
             Responsive(controls, new(12, -698, 616, 438));
-            presetLabel = Control("Setup", root, new(720, -75, 268, 44), () =>
+            var setupPanel = Rect("Drill setup panel", root, new(0, 1), new(0, 1),
+                new(712, -420), new(284, 260));
+            Panel(setupPanel, Navy);
+            Responsive(setupPanel, new(20, -900, 600, 159));
+            var setupHeading = Label("Drill setup heading", root, new(720, -426), new(268, 32), 20, Color.white);
+            setupHeading.text = "DRILL SETUP";
+            Responsive(setupHeading.rectTransform, new(26, -900, 274, 28));
+            presetLabel = Control("Scenario", root, new(720, -464, 268, 44), () =>
             {
                 presetIndex = (presetIndex + 1) % presets.Length;
                 SelectSeed(shift.Seed);
             }, out _);
             presetLabel.fontSize = 17;
-            Responsive(presetLabel, new(26, -815, 274, 66));
+            Responsive(presetLabel, new(26, -932, 274, 52));
             Responsive(Control("Review / Export", root, new(720, -726, 268, 44), () => review.Begin(), out _),
-                new(26, -1048, 274, 66));
+                new(26, -1070, 588, 54));
             rink = Rect("Defensive zone", root, new(0, 1), new(0, 1), new(22, -55),
                 new(DefensiveZoneView.Width, DefensiveZoneView.Height));
             Responsive(rink, new((640f - DefensiveZoneView.Width) / 2f, -42, DefensiveZoneView.Width, DefensiveZoneView.Height));
@@ -498,30 +520,34 @@ namespace ShiftHappens
             warning = Label("Pass warning", warningPanel, Vector2.zero, warningPanel.sizeDelta, 24, Navy);
             warning.text = "PASS TOWARD THE SLOT";
 
-            status = Label("Play by play", root, new(720, -134), new(268, 118), 22, Color.white);
-            coverage = Label("Coaching cue and scoring", root, new(720, -255), new(268, 126), 22, Amber);
+            status = Label("Play by play", root, new(720, -72), new(268, 114), 22, Color.white);
+            coverage = Label("Coaching cue and scoring", root, new(720, -187), new(268, 110), 22, Amber);
             coverage.resizeTextMinSize = 16;
             coverage.resizeTextMaxSize = 22;
             Responsive(status.rectTransform, new(26, -704, 274, 100));
             Responsive(coverage.rectTransform, new(340, -704, 274, 100));
-            playLabel = Control("Start", root, new(720, -408, 268, 60), PlayOrReplay, out _);
-            Responsive(playLabel, new(340, -815, 274, 66));
-            var point = Control("Point look · 0", root, new(720, -484, 129, 46), () => SelectSeed(0), out _);
-            var slot = Control("Slot look · 1", root, new(859, -484, 129, 46), () => SelectSeed(1), out _);
-            point.fontSize = slot.fontSize = 17;
-            Responsive(point, new(26, -893, 274, 66));
-            Responsive(slot, new(340, -893, 274, 66));
-            newOpponentLabel = Control("New opponent", root, new(720, -542, 268, 46), NewOpponentOrReturnToPractice,
-                out newOpponentButton);
-            Responsive(newOpponentLabel, new(340, -1048, 274, 66));
-            modeLabel = Control("Guided", root, new(720, -600, 129, 46), () =>
+            var playHeading = Label("Play controls heading", root, new(720, -305), new(268, 30), 20, Color.white);
+            playHeading.text = "PLAY CONTROLS";
+            Responsive(playHeading.rectTransform, new(26, -806, 588, 28));
+            playLabel = Control("Start", root, new(720, -342, 129, 56), PlayOrReplay, out _);
+            Responsive(playLabel, new(26, -834, 274, 56));
+            Responsive(Control("Tie up · 4", root, new(859, -342, 129, 56), () => shift.TieUp(), out tieButton),
+                new(340, -834, 274, 56));
+            var reset = Control("Reset shift", root, new(720, -568, 129, 46), () => SelectSeed(shift.Seed), out resetShiftButton);
+            reset.fontSize = 17;
+            Responsive(reset, new(26, -992, 274, 56));
+            newVariationLabel = Control("New variation", root, new(859, -568, 129, 46), NewVariationOrReturnToPractice,
+                out newVariationButton);
+            newVariationLabel.fontSize = 16;
+            Responsive(newVariationLabel, new(340, -992, 274, 56));
+            variationLabel = Label("Variation number", root, new(720, -624), new(268, 34), 17, Color.white);
+            Responsive(variationLabel.rectTransform, new(340, -900, 274, 28));
+            modeLabel = Control("Mode", root, new(720, -516, 268, 44), () =>
             {
                 guided = !guided;
                 SelectSeed(shift.Seed);
             }, out _);
-            Responsive(modeLabel, new(26, -971, 274, 66));
-            Responsive(Control("Tie up · 4", root, new(859, -600, 129, 46), () => shift.TieUp(), out tieButton),
-                new(340, -971, 274, 66));
+            Responsive(modeLabel, new(340, -932, 274, 52));
 
             var input = new GameObject("Practice Input", typeof(EventSystem), typeof(InputSystemUIInputModule));
             input.transform.SetParent(transform, false);

@@ -66,18 +66,30 @@ namespace ShiftHappens
             NetFrontRole = RedForward.LW,
             SupportRole = RedForward.RW,
         };
-        public static DraftShiftSettings BehindNetPreset(float wait = 0) => new()
+        public static DraftShiftSettings BehindNetPreset(float wait = 0)
         {
-            BehindNetCarry = true,
-            BehindNetWait = wait,
-            PlayerStart = new(151, 373),
-            CoverageReach = 82,
-            PartnerStart = new(132, 516),
-            BlueCenter = new(243, 329),
-            NetFrontStart = new(208, 397),
-            CarrierStart = new(171, 232),
-            PuckStart = new(154, 241),
-        };
+            var settings = new DraftShiftSettings
+            {
+                BehindNetCarry = true,
+                BehindNetWait = wait,
+                PlayerStart = new(151, 373),
+                CoverageReach = 82,
+                PartnerStart = new(132, 516),
+                BlueCenter = new(243, 329),
+                NetFrontStart = new(208, 397),
+                CarrierStart = new(171, 232),
+                PuckStart = new(154, 241),
+            };
+            if (wait > 0f) return settings;
+
+            // David's November 12 Behind net review marks, in unmirrored rink coordinates.
+            settings.PlayerStart = new(161.62095642089844f, 355.35455322265625f);
+            settings.BlueRightWing = new(330.43463134765625f, 426.8605041503906f);
+            settings.NetFrontStart = new(293.7038879394531f, 387.34405517578125f);
+            settings.RedLeftDefense = new(382.74810791015625f, 430.6239929199219f);
+            settings.RedSupport = new(255.8600616455078f, 488.95782470703125f);
+            return settings;
+        }
 
         public string NetFrontLabel => NetFrontRole.ToString();
         public string CarrierLabel => CarrierRole.ToString();
