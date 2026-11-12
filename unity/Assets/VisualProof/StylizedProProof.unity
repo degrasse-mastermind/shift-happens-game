@@ -148,6 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a80134863ffedc498626469ceb09dcf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShiftHappens.VisualProof.StylizedProProof
+  blueDefensemanModel: {fileID: 919132149155446097, guid: 7c8b84a5161d4f04a0d4a8d4787a2f63, type: 3}
 --- !u!4 &2026652509
 Transform:
   m_ObjectHideFlags: 0
